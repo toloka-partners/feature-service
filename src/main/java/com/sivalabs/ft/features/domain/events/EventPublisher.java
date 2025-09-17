@@ -17,7 +17,10 @@ public class EventPublisher {
     }
 
     public void publishFeatureCreatedEvent(Feature feature) {
+        EventIdentifier eventIdentifier =
+                EventIdentifier.create("feature_created", feature.getId().toString(), "Feature");
         FeatureCreatedEvent event = new FeatureCreatedEvent(
+                eventIdentifier,
                 feature.getId(),
                 feature.getCode(),
                 feature.getTitle(),
@@ -31,7 +34,10 @@ public class EventPublisher {
     }
 
     public void publishFeatureUpdatedEvent(Feature feature) {
+        EventIdentifier eventIdentifier =
+                EventIdentifier.create("feature_updated", feature.getId().toString(), "Feature");
         FeatureUpdatedEvent event = new FeatureUpdatedEvent(
+                eventIdentifier,
                 feature.getId(),
                 feature.getCode(),
                 feature.getTitle(),
@@ -47,7 +53,10 @@ public class EventPublisher {
     }
 
     public void publishFeatureDeletedEvent(Feature feature, String deletedBy, Instant deletedAt) {
+        EventIdentifier eventIdentifier =
+                EventIdentifier.create("feature_deleted", feature.getId().toString(), "Feature");
         FeatureDeletedEvent event = new FeatureDeletedEvent(
+                eventIdentifier,
                 feature.getId(),
                 feature.getCode(),
                 feature.getTitle(),
