@@ -16,9 +16,15 @@ public class EventPublisher {
         this.properties = properties;
     }
 
-    public void publishFeatureCreatedEvent(Feature feature) {
-        EventIdentifier eventIdentifier =
-                EventIdentifier.create("feature_created", feature.getId().toString(), "Feature");
+    public void publishFeatureCreatedEvent(String eventId, Feature feature) {
+        EventIdentifier eventIdentifier = new EventIdentifier(
+                eventId,
+                "feature_created",
+                feature.getId().toString(),
+                "Feature",
+                feature.getCreatedAt(),
+                eventId // Use eventId as correlation ID as well
+                );
         FeatureCreatedEvent event = new FeatureCreatedEvent(
                 eventIdentifier,
                 feature.getId(),
@@ -33,9 +39,15 @@ public class EventPublisher {
         kafkaTemplate.send(properties.events().newFeatures(), event);
     }
 
-    public void publishFeatureUpdatedEvent(Feature feature) {
-        EventIdentifier eventIdentifier =
-                EventIdentifier.create("feature_updated", feature.getId().toString(), "Feature");
+    public void publishFeatureUpdatedEvent(String eventId, Feature feature) {
+        EventIdentifier eventIdentifier = new EventIdentifier(
+                eventId,
+                "feature_updated",
+                feature.getId().toString(),
+                "Feature",
+                feature.getUpdatedAt(),
+                eventId // Use eventId as correlation ID as well
+                );
         FeatureUpdatedEvent event = new FeatureUpdatedEvent(
                 eventIdentifier,
                 feature.getId(),
@@ -52,9 +64,15 @@ public class EventPublisher {
         kafkaTemplate.send(properties.events().updatedFeatures(), event);
     }
 
-    public void publishFeatureDeletedEvent(Feature feature, String deletedBy, Instant deletedAt) {
-        EventIdentifier eventIdentifier =
-                EventIdentifier.create("feature_deleted", feature.getId().toString(), "Feature");
+    public void publishFeatureDeletedEvent(String eventId, Feature feature, String deletedBy, Instant deletedAt) {
+        EventIdentifier eventIdentifier = new EventIdentifier(
+                eventId,
+                "feature_deleted",
+                feature.getId().toString(),
+                "Feature",
+                deletedAt,
+                eventId // Use eventId as correlation ID as well
+                );
         FeatureDeletedEvent event = new FeatureDeletedEvent(
                 eventIdentifier,
                 feature.getId(),

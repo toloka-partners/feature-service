@@ -1,6 +1,7 @@
 package com.sivalabs.ft.features.api.controllers;
 
 import com.sivalabs.ft.features.api.models.CreateFeaturePayload;
+import com.sivalabs.ft.features.api.models.DeleteFeaturePayload;
 import com.sivalabs.ft.features.api.models.UpdateFeaturePayload;
 import com.sivalabs.ft.features.api.utils.SecurityUtils;
 import com.sivalabs.ft.features.domain.*;
@@ -147,20 +148,21 @@ class FeatureController {
             @RequestBody @Valid CreateFeaturePayload payload,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
-        if (idempotencyKey != null) {
-            var existing = idempotencyService.checkAndStore(idempotencyKey, "CREATE_FEATURE", null);
-            if (existing.isPresent()) {
-                String existingCode = existing.get();
-                URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                        .path("/{code}")
-                        .buildAndExpand(existingCode)
-                        .toUri();
-                return ResponseEntity.created(location).build();
-            }
+        // Use eventId from payload as idempotency key
+        String eventId = payload.eventId();
+        var existing = idempotencyService.checkAndStore(eventId, "CREATE_FEATURE", null);
+        if (existing.isPresent()) {
+            String existingCode = existing.get();
+            URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+                    .path("/{code}")
+                    .buildAndExpand(existingCode)
+                    .toUri();
+            return ResponseEntity.created(location).build();
         }
 
         var username = SecurityUtils.getCurrentUsername();
         var cmd = new CreateFeatureCommand(
+                payload.eventId(),
                 payload.productCode(),
                 payload.releaseCode(),
                 payload.title(),
@@ -170,9 +172,7 @@ class FeatureController {
         String code = featureService.createFeature(cmd);
         log.info("Created feature with code {}", code);
 
-        if (idempotencyKey != null) {
-            idempotencyService.checkAndStore(idempotencyKey, "CREATE_FEATURE", code);
-        }
+        idempotencyService.checkAndStore(eventId, "CREATE_FEATURE", code);
 
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{code}")
@@ -196,15 +196,16 @@ class FeatureController {
             @RequestBody UpdateFeaturePayload payload,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
-        if (idempotencyKey != null) {
-            var existing = idempotencyService.checkAndStore(idempotencyKey, "UPDATE_FEATURE", "UPDATED");
-            if (existing.isPresent()) {
-                return;
-            }
+        // Use eventId from payload as idempotency key
+        String eventId = payload.eventId();
+        var existing = idempotencyService.checkAndStore(eventId, "UPDATE_FEATURE", "UPDATED");
+        if (existing.isPresent()) {
+            return;
         }
 
         var username = SecurityUtils.getCurrentUsername();
         var cmd = new UpdateFeatureCommand(
+                payload.eventId(),
                 code,
                 payload.title(),
                 payload.description(),
@@ -214,9 +215,7 @@ class FeatureController {
                 username);
         featureService.updateFeature(cmd);
 
-        if (idempotencyKey != null) {
-            idempotencyService.checkAndStore(idempotencyKey, "UPDATE_FEATURE", "UPDATED");
-        }
+        idempotencyService.checkAndStore(eventId, "UPDATE_FEATURE", "UPDATED");
     }
 
     @DeleteMapping("/{code}")
@@ -231,25 +230,24 @@ class FeatureController {
             })
     ResponseEntity<Void> deleteFeature(
             @PathVariable String code,
+            @RequestBody @Valid DeleteFeaturePayload payload,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
-        if (idempotencyKey != null) {
-            var existing = idempotencyService.checkAndStore(idempotencyKey, "DELETE_FEATURE", "DELETED");
-            if (existing.isPresent()) {
-                return ResponseEntity.ok().build();
-            }
+        // Use eventId from payload as idempotency key
+        String eventId = payload.eventId();
+        var existing = idempotencyService.checkAndStore(eventId, "DELETE_FEATURE", "DELETED");
+        if (existing.isPresent()) {
+            return ResponseEntity.ok().build();
         }
 
         var username = SecurityUtils.getCurrentUsername();
         if (!featureService.isFeatureExists(code)) {
             return ResponseEntity.notFound().build();
         }
-        var cmd = new DeleteFeatureCommand(code, username);
+        var cmd = new DeleteFeatureCommand(payload.eventId(), code, username);
         featureService.deleteFeature(cmd);
 
-        if (idempotencyKey != null) {
-            idempotencyService.checkAndStore(idempotencyKey, "DELETE_FEATURE", "DELETED");
-        }
+        idempotencyService.checkAndStore(eventId, "DELETE_FEATURE", "DELETED");
 
         return ResponseEntity.ok().build();
     }

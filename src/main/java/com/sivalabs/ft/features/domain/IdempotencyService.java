@@ -1,5 +1,8 @@
 package com.sivalabs.ft.features.domain;
 
+import com.sivalabs.ft.features.domain.events.ProcessedEvent;
+import com.sivalabs.ft.features.domain.events.ProcessedEventRepository;
+import com.sivalabs.ft.features.domain.models.EventType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -52,9 +55,11 @@ interface IdempotencyKeyRepository extends JpaRepository<IdempotencyKey, String>
 @Service
 public class IdempotencyService {
     private final IdempotencyKeyRepository repository;
+    private final ProcessedEventRepository processedEventRepository;
 
-    public IdempotencyService(IdempotencyKeyRepository repository) {
+    public IdempotencyService(IdempotencyKeyRepository repository, ProcessedEventRepository processedEventRepository) {
         this.repository = repository;
+        this.processedEventRepository = processedEventRepository;
     }
 
     @Transactional
@@ -65,6 +70,12 @@ public class IdempotencyService {
         }
 
         repository.save(new IdempotencyKey(key, operationType, result));
+
+        // Also track in processed_events table for API operations
+        if (!processedEventRepository.existsById(key)) {
+            processedEventRepository.save(new ProcessedEvent(key, EventType.API.name(), operationType));
+        }
+
         return Optional.empty();
     }
 }
