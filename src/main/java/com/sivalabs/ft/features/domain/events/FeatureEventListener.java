@@ -14,7 +14,7 @@ public class FeatureEventListener {
         this.deduplicationService = deduplicationService;
     }
 
-    @KafkaListener(topics = "${app.events.new-features}")
+    @KafkaListener(topics = "${ft.events.new-features}")
     public void handleFeatureCreatedEvent(FeatureCreatedEvent event) {
         String eventId = event.eventIdentifier().eventId();
 
@@ -31,7 +31,7 @@ public class FeatureEventListener {
                 event.eventIdentifier().aggregateId());
     }
 
-    @KafkaListener(topics = "${app.events.updated-features}")
+    @KafkaListener(topics = "${ft.events.updated-features}")
     public void handleFeatureUpdatedEvent(FeatureUpdatedEvent event) {
         String eventId = event.eventIdentifier().eventId();
 
@@ -48,7 +48,7 @@ public class FeatureEventListener {
                 event.eventIdentifier().aggregateId());
     }
 
-    @KafkaListener(topics = "${app.events.deleted-features}")
+    @KafkaListener(topics = "${ft.events.deleted-features}")
     public void handleFeatureDeletedEvent(FeatureDeletedEvent event) {
         String eventId = event.eventIdentifier().eventId();
 
