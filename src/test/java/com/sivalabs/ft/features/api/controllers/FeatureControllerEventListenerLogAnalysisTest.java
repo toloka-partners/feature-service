@@ -66,6 +66,9 @@ class FeatureControllerEventListenerLogAnalysisTest extends AbstractIT {
         listAppender = new ListAppender<>();
         listAppender.start();
         logger.addAppender(listAppender);
+
+        // Clear any existing logs to ensure test isolation
+        listAppender.list.clear();
     }
 
     /**

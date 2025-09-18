@@ -51,6 +51,12 @@ public class FeatureControllerEventDeduplicationTest extends AbstractIT {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        // Clean up processed_events table before each test to ensure isolation
+        jdbcTemplate.execute("DELETE FROM processed_events");
+    }
+
     @Test
     @WithMockOAuth2User(username = "testuser")
     void testCreateFeatureGeneratesEventAndProcessedByDeduplication() throws Exception {
@@ -84,11 +90,10 @@ public class FeatureControllerEventDeduplicationTest extends AbstractIT {
             int apiEvents = getProcessedEventsCountByType("API");
             int eventEvents = getProcessedEventsCountByType("EVENT");
 
-            assertTrue(
-                    totalEvents >= 2,
-                    "Should have at least 2 processed events (API + EVENT), but found: " + totalEvents);
-            assertTrue(apiEvents >= 1, "Should have at least 1 API event, but found: " + apiEvents);
-            assertTrue(eventEvents >= 1, "Should have at least 1 EVENT event, but found: " + eventEvents);
+            assertEquals(
+                    2, totalEvents, "Should have exactly 2 processed events (API + EVENT), but found: " + totalEvents);
+            assertEquals(1, apiEvents, "Should have exactly 1 API event, but found: " + apiEvents);
+            assertEquals(1, eventEvents, "Should have exactly 1 EVENT event, but found: " + eventEvents);
         });
     }
 
@@ -115,9 +120,18 @@ public class FeatureControllerEventDeduplicationTest extends AbstractIT {
                 extractFeatureCodeFromLocation(createResult.getResponse().getHeader("Location"));
 
         // Wait for create event processing
-        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
             int totalEvents = getProcessedEventsCount();
-            assertTrue(totalEvents >= 2, "Should have at least 2 events after create, but found: " + totalEvents);
+            int apiEvents = getProcessedEventsCountByType("API");
+            int eventEvents = getProcessedEventsCountByType("EVENT");
+
+            assertEquals(
+                    2,
+                    totalEvents,
+                    "Should have exactly 2 events after create (API + EVENT), but found: " + totalEvents + " (API: "
+                            + apiEvents + ", EVENT: " + eventEvents + ")");
+            assertEquals(1, apiEvents, "Should have exactly 1 API event, but found: " + apiEvents);
+            assertEquals(1, eventEvents, "Should have exactly 1 EVENT event, but found: " + eventEvents);
         });
 
         // Act - update feature
@@ -141,12 +155,13 @@ public class FeatureControllerEventDeduplicationTest extends AbstractIT {
             int apiEvents = getProcessedEventsCountByType("API");
             int eventEvents = getProcessedEventsCountByType("EVENT");
 
-            assertTrue(
-                    totalEvents >= 4,
-                    "Should have at least 4 events after create+update (2 API + 2 EVENT), but found: " + totalEvents);
-            assertTrue(apiEvents >= 2, "Should have at least 2 API events (create+update), but found: " + apiEvents);
-            assertTrue(
-                    eventEvents >= 2, "Should have at least 2 EVENT events (create+update), but found: " + eventEvents);
+            assertEquals(
+                    4,
+                    totalEvents,
+                    "Should have exactly 4 events after create+update (2 API + 2 EVENT), but found: " + totalEvents);
+            assertEquals(2, apiEvents, "Should have exactly 2 API events (create+update), but found: " + apiEvents);
+            assertEquals(
+                    2, eventEvents, "Should have exactly 2 EVENT events (create+update), but found: " + eventEvents);
         });
     }
 
@@ -173,9 +188,18 @@ public class FeatureControllerEventDeduplicationTest extends AbstractIT {
                 extractFeatureCodeFromLocation(createResult.getResponse().getHeader("Location"));
 
         // Wait for create event processing
-        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
             int totalEvents = getProcessedEventsCount();
-            assertTrue(totalEvents >= 2, "Should have at least 2 events after create, but found: " + totalEvents);
+            int apiEvents = getProcessedEventsCountByType("API");
+            int eventEvents = getProcessedEventsCountByType("EVENT");
+
+            assertEquals(
+                    2,
+                    totalEvents,
+                    "Should have exactly 2 events after create (API + EVENT), but found: " + totalEvents + " (API: "
+                            + apiEvents + ", EVENT: " + eventEvents + ")");
+            assertEquals(1, apiEvents, "Should have exactly 1 API event, but found: " + apiEvents);
+            assertEquals(1, eventEvents, "Should have exactly 1 EVENT event, but found: " + eventEvents);
         });
 
         // Act - delete feature
@@ -187,12 +211,13 @@ public class FeatureControllerEventDeduplicationTest extends AbstractIT {
             int apiEvents = getProcessedEventsCountByType("API");
             int eventEvents = getProcessedEventsCountByType("EVENT");
 
-            assertTrue(
-                    totalEvents >= 4,
-                    "Should have at least 4 events after create+delete (2 API + 2 EVENT), but found: " + totalEvents);
-            assertTrue(apiEvents >= 2, "Should have at least 2 API events (create+delete), but found: " + apiEvents);
-            assertTrue(
-                    eventEvents >= 2, "Should have at least 2 EVENT events (create+delete), but found: " + eventEvents);
+            assertEquals(
+                    4,
+                    totalEvents,
+                    "Should have exactly 4 events after create+delete (2 API + 2 EVENT), but found: " + totalEvents);
+            assertEquals(2, apiEvents, "Should have exactly 2 API events (create+delete), but found: " + apiEvents);
+            assertEquals(
+                    2, eventEvents, "Should have exactly 2 EVENT events (create+delete), but found: " + eventEvents);
         });
     }
 
@@ -221,9 +246,18 @@ public class FeatureControllerEventDeduplicationTest extends AbstractIT {
         String featureCode =
                 extractFeatureCodeFromLocation(createResult.getResponse().getHeader("Location"));
 
-        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
             int totalEvents = getProcessedEventsCount();
-            assertTrue(totalEvents >= 2, "CREATE event should be processed (API + EVENT), but found: " + totalEvents);
+            int apiEvents = getProcessedEventsCountByType("API");
+            int eventEvents = getProcessedEventsCountByType("EVENT");
+
+            assertEquals(
+                    2,
+                    totalEvents,
+                    "CREATE event should be processed (API + EVENT), but found: " + totalEvents + " (API: " + apiEvents
+                            + ", EVENT: " + eventEvents + ")");
+            assertEquals(1, apiEvents, "Should have exactly 1 API event, but found: " + apiEvents);
+            assertEquals(1, eventEvents, "Should have exactly 1 EVENT event, but found: " + eventEvents);
         });
 
         // 2. READ (verify that feature was created)
@@ -249,8 +283,8 @@ public class FeatureControllerEventDeduplicationTest extends AbstractIT {
 
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
             int totalEvents = getProcessedEventsCount();
-            assertTrue(
-                    totalEvents >= 4, "UPDATE event should be processed (2 API + 2 EVENT), but found: " + totalEvents);
+            assertEquals(
+                    4, totalEvents, "UPDATE event should be processed (2 API + 2 EVENT), but found: " + totalEvents);
         });
 
         // 4. DELETE
@@ -261,11 +295,14 @@ public class FeatureControllerEventDeduplicationTest extends AbstractIT {
             int apiEvents = getProcessedEventsCountByType("API");
             int eventEvents = getProcessedEventsCountByType("EVENT");
 
-            assertTrue(
-                    totalEvents >= 6, "DELETE event should be processed (3 API + 3 EVENT), but found: " + totalEvents);
-            assertTrue(apiEvents >= 3, "Should have 3 API events (create+update+delete), but found: " + apiEvents);
-            assertTrue(
-                    eventEvents >= 3, "Should have 3 EVENT events (create+update+delete), but found: " + eventEvents);
+            assertEquals(
+                    6, totalEvents, "DELETE event should be processed (3 API + 3 EVENT), but found: " + totalEvents);
+            assertEquals(
+                    3, apiEvents, "Should have exactly 3 API events (create+update+delete), but found: " + apiEvents);
+            assertEquals(
+                    3,
+                    eventEvents,
+                    "Should have exactly 3 EVENT events (create+update+delete), but found: " + eventEvents);
         });
 
         // Verify that feature was actually deleted
@@ -302,7 +339,7 @@ public class FeatureControllerEventDeduplicationTest extends AbstractIT {
                 jdbcTemplate.update("DELETE FROM processed_events WHERE expires_at < ?", LocalDateTime.now());
 
         // Assert
-        assertTrue(deletedCount >= 1, "Should have deleted at least one expired event, but deleted: " + deletedCount);
+        assertEquals(1, deletedCount, "Should have deleted exactly one expired event, but deleted: " + deletedCount);
 
         // Verify the event was actually deleted
         int remainingCount = jdbcTemplate.queryForObject(

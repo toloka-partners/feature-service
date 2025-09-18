@@ -1,7 +1,5 @@
 package com.sivalabs.ft.features.domain;
 
-import com.sivalabs.ft.features.domain.events.ProcessedEvent;
-import com.sivalabs.ft.features.domain.events.ProcessedEventRepository;
 import com.sivalabs.ft.features.domain.models.EventType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -55,27 +53,29 @@ interface IdempotencyKeyRepository extends JpaRepository<IdempotencyKey, String>
 @Service
 public class IdempotencyService {
     private final IdempotencyKeyRepository repository;
-    private final ProcessedEventRepository processedEventRepository;
+    private final UniversalIdempotencyService universalIdempotencyService;
 
-    public IdempotencyService(IdempotencyKeyRepository repository, ProcessedEventRepository processedEventRepository) {
+    public IdempotencyService(
+            IdempotencyKeyRepository repository, UniversalIdempotencyService universalIdempotencyService) {
         this.repository = repository;
-        this.processedEventRepository = processedEventRepository;
+        this.universalIdempotencyService = universalIdempotencyService;
     }
 
     @Transactional
     public Optional<String> checkAndStore(String key, String operationType, String result) {
+        // First check in the universal idempotency service
+        Optional<String> universalResult = universalIdempotencyService.checkAndProcess(key, EventType.API, result);
+        if (universalResult.isPresent()) {
+            return universalResult;
+        }
+
+        // For backward compatibility, also store in legacy idempotency_keys table
         Optional<IdempotencyKey> existing = repository.findById(key);
         if (existing.isPresent()) {
-            return Optional.of(existing.get().getResult());
+            return Optional.ofNullable(existing.get().getResult());
         }
 
         repository.save(new IdempotencyKey(key, operationType, result));
-
-        // Also track in processed_events table for API operations
-        if (!processedEventRepository.existsById(key)) {
-            processedEventRepository.save(new ProcessedEvent(key, EventType.API.name(), operationType));
-        }
-
         return Optional.empty();
     }
 }

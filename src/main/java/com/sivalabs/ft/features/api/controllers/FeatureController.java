@@ -1,7 +1,6 @@
 package com.sivalabs.ft.features.api.controllers;
 
 import com.sivalabs.ft.features.api.models.CreateFeaturePayload;
-import com.sivalabs.ft.features.api.models.DeleteFeaturePayload;
 import com.sivalabs.ft.features.api.models.UpdateFeaturePayload;
 import com.sivalabs.ft.features.api.utils.SecurityUtils;
 import com.sivalabs.ft.features.domain.*;
@@ -172,8 +171,6 @@ class FeatureController {
         String code = featureService.createFeature(cmd);
         log.info("Created feature with code {}", code);
 
-        idempotencyService.checkAndStore(eventId, "CREATE_FEATURE", code);
-
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{code}")
                 .buildAndExpand(code)
@@ -214,8 +211,6 @@ class FeatureController {
                 payload.assignedTo(),
                 username);
         featureService.updateFeature(cmd);
-
-        idempotencyService.checkAndStore(eventId, "UPDATE_FEATURE", "UPDATED");
     }
 
     @DeleteMapping("/{code}")
@@ -228,13 +223,10 @@ class FeatureController {
                 @ApiResponse(responseCode = "401", description = "Unauthorized"),
                 @ApiResponse(responseCode = "403", description = "Forbidden"),
             })
-    ResponseEntity<Void> deleteFeature(
-            @PathVariable String code,
-            @RequestBody @Valid DeleteFeaturePayload payload,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+    ResponseEntity<Void> deleteFeature(@PathVariable String code) {
 
-        // Use eventId from payload as idempotency key
-        String eventId = payload.eventId();
+        // Generate a unique eventId for this delete operation
+        String eventId = "DELETE_" + code + "_" + System.currentTimeMillis();
         var existing = idempotencyService.checkAndStore(eventId, "DELETE_FEATURE", "DELETED");
         if (existing.isPresent()) {
             return ResponseEntity.ok().build();
@@ -244,10 +236,8 @@ class FeatureController {
         if (!featureService.isFeatureExists(code)) {
             return ResponseEntity.notFound().build();
         }
-        var cmd = new DeleteFeatureCommand(payload.eventId(), code, username);
+        var cmd = new DeleteFeatureCommand(eventId, code, username);
         featureService.deleteFeature(cmd);
-
-        idempotencyService.checkAndStore(eventId, "DELETE_FEATURE", "DELETED");
 
         return ResponseEntity.ok().build();
     }
