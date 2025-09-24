@@ -12,7 +12,10 @@ import com.sivalabs.ft.features.domain.Commands.DeleteFeatureCommand;
 import com.sivalabs.ft.features.domain.Commands.DeleteFeatureDependencyCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateFeatureCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateFeatureDependencyCommand;
+import com.sivalabs.ft.features.domain.dtos.FeatureDependencyDto;
 import com.sivalabs.ft.features.domain.dtos.FeatureDto;
+import com.sivalabs.ft.features.domain.entities.FeatureDependency;
+import com.sivalabs.ft.features.domain.mappers.FeatureDependencyMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -31,6 +34,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -50,14 +54,17 @@ class FeatureController {
     private final FeatureService featureService;
     private final FavoriteFeatureService favoriteFeatureService;
     private final FeatureDependencyService featureDependencyService;
+    private final FeatureDependencyMapper featureDependencyMapper;
 
     FeatureController(
             FeatureService featureService,
             FavoriteFeatureService favoriteFeatureService,
-            FeatureDependencyService featureDependencyService) {
+            FeatureDependencyService featureDependencyService,
+            FeatureDependencyMapper featureDependencyMapper) {
         this.featureService = featureService;
         this.favoriteFeatureService = favoriteFeatureService;
         this.featureDependencyService = featureDependencyService;
+        this.featureDependencyMapper = featureDependencyMapper;
     }
 
     @GetMapping("")
@@ -289,5 +296,120 @@ class FeatureController {
         } catch (Exception e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    @GetMapping("/{featureCode}/dependencies")
+    @Transactional(readOnly = true)
+    @Operation(
+            summary = "Get all dependencies for a feature",
+            description = "Retrieve all features that the specified feature depends on",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array =
+                                                @ArraySchema(
+                                                        schema =
+                                                                @Schema(implementation = FeatureDependencyDto.class)))),
+                @ApiResponse(responseCode = "404", description = "Feature not found")
+            })
+    ResponseEntity<List<FeatureDependencyDto>> getFeatureDependencies(
+            @PathVariable String featureCode,
+            @RequestParam(value = "productCode", required = false) String productCode,
+            @RequestParam(value = "releaseCode", required = false) String releaseCode,
+            @RequestParam(value = "status", required = false) String status) {
+        if (!featureService.isFeatureExists(featureCode)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        List<FeatureDependency> dependencies;
+        if (productCode != null || releaseCode != null || status != null) {
+            dependencies = featureDependencyService.getDependenciesWithFiltering(
+                    featureCode, productCode, releaseCode, status);
+        } else {
+            dependencies = featureDependencyService.getDependencies(featureCode);
+        }
+
+        List<FeatureDependencyDto> dependencyDtos =
+                dependencies.stream().map(featureDependencyMapper::toDto).toList();
+        return ResponseEntity.ok(dependencyDtos);
+    }
+
+    @GetMapping("/{featureCode}/dependents")
+    @Transactional(readOnly = true)
+    @Operation(
+            summary = "Get all dependents for a feature",
+            description = "Retrieve all features that depend on the specified feature",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array =
+                                                @ArraySchema(
+                                                        schema =
+                                                                @Schema(implementation = FeatureDependencyDto.class)))),
+                @ApiResponse(responseCode = "404", description = "Feature not found")
+            })
+    ResponseEntity<List<FeatureDependencyDto>> getFeatureDependents(
+            @PathVariable String featureCode,
+            @RequestParam(value = "productCode", required = false) String productCode,
+            @RequestParam(value = "releaseCode", required = false) String releaseCode,
+            @RequestParam(value = "status", required = false) String status) {
+        if (!featureService.isFeatureExists(featureCode)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        List<FeatureDependency> dependents;
+        if (productCode != null || releaseCode != null || status != null) {
+            dependents =
+                    featureDependencyService.getDependentsWithFiltering(featureCode, productCode, releaseCode, status);
+        } else {
+            dependents = featureDependencyService.getDependents(featureCode);
+        }
+
+        List<FeatureDependencyDto> dependentDtos =
+                dependents.stream().map(featureDependencyMapper::toDto).toList();
+        return ResponseEntity.ok(dependentDtos);
+    }
+
+    @GetMapping("/{featureCode}/impact")
+    @Transactional(readOnly = true)
+    @Operation(
+            summary = "Get impact analysis for a feature",
+            description =
+                    "Retrieve comprehensive list of all affected features (direct and indirect dependents) with filtering support",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array =
+                                                @ArraySchema(
+                                                        schema =
+                                                                @Schema(implementation = FeatureDependencyDto.class)))),
+                @ApiResponse(responseCode = "404", description = "Feature not found")
+            })
+    ResponseEntity<List<FeatureDependencyDto>> getFeatureImpact(
+            @PathVariable String featureCode,
+            @RequestParam(value = "productCode", required = false) String productCode,
+            @RequestParam(value = "releaseCode", required = false) String releaseCode,
+            @RequestParam(value = "status", required = false) String status) {
+        if (!featureService.isFeatureExists(featureCode)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        List<FeatureDependency> impactAnalysis =
+                featureDependencyService.getImpactAnalysis(featureCode, productCode, releaseCode, status);
+        List<FeatureDependencyDto> impactDtos =
+                impactAnalysis.stream().map(featureDependencyMapper::toDto).toList();
+        return ResponseEntity.ok(impactDtos);
     }
 }
