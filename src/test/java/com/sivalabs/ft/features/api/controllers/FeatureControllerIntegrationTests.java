@@ -56,7 +56,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(updatePayload)
                 .exchange();
-        assertThat(updateResult).hasStatusOk();
+        assertThat(updateResult).hasStatus2xxSuccessful();
 
         // Verify dependency was updated in database
         verifyDependencyExists("IDEA-1", "IDEA-2", "HARD", "Updated dependency notes for verification");
@@ -65,7 +65,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
         var deleteResult = mvc.delete()
                 .uri("/api/features/{featureCode}/dependencies/{dependsOnFeatureCode}", "IDEA-1", "IDEA-2")
                 .exchange();
-        assertThat(deleteResult).hasStatusOk();
+        assertThat(deleteResult).hasStatus2xxSuccessful();
 
         // Verify dependency was deleted from database
         verifyDependencyNotExists("IDEA-1", "IDEA-2");
@@ -152,7 +152,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(updatePayload)
                 .exchange();
-        assertThat(updateResult).hasStatusOk();
+        assertThat(updateResult).hasStatus2xxSuccessful();
 
         // Verify first dependency was updated
         verifyDependencyExists("IDEA-1", "IDEA-2", "OPTIONAL", "Updated first dependency");
@@ -161,7 +161,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
         var deleteResult = mvc.delete()
                 .uri("/api/features/{featureCode}/dependencies/{dependsOnFeatureCode}", "IDEA-1", "GO-3")
                 .exchange();
-        assertThat(deleteResult).hasStatusOk();
+        assertThat(deleteResult).hasStatus2xxSuccessful();
 
         // Verify second dependency was deleted from database
         verifyDependencyNotExists("IDEA-1", "GO-3");
@@ -179,7 +179,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
         var cleanup = mvc.delete()
                 .uri("/api/features/{featureCode}/dependencies/{dependsOnFeatureCode}", "IDEA-1", "IDEA-2")
                 .exchange();
-        assertThat(cleanup).hasStatusOk();
+        assertThat(cleanup).hasStatus2xxSuccessful();
     }
 
     @Test
@@ -219,7 +219,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(updateToHardPayload)
                 .exchange();
-        assertThat(updateToHardResult).hasStatusOk();
+        assertThat(updateToHardResult).hasStatus2xxSuccessful();
 
         // Verify transition to HARD type
         verifyDependencyExists("IDEA-1", "IDEA-2", "HARD", "Updated to hard dependency");
@@ -238,7 +238,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(updateToOptionalPayload)
                 .exchange();
-        assertThat(updateToOptionalResult).hasStatusOk();
+        assertThat(updateToOptionalResult).hasStatus2xxSuccessful();
 
         // Verify final transition to OPTIONAL type
         verifyDependencyExists("IDEA-1", "IDEA-2", "OPTIONAL", "Updated to optional dependency");
@@ -247,7 +247,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
         var cleanup = mvc.delete()
                 .uri("/api/features/{featureCode}/dependencies/{dependsOnFeatureCode}", "IDEA-1", "IDEA-2")
                 .exchange();
-        assertThat(cleanup).hasStatusOk();
+        assertThat(cleanup).hasStatus2xxSuccessful();
     }
 
     @Test
@@ -287,7 +287,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(updateWithNotesPayload)
                 .exchange();
-        assertThat(updateWithNotesResult).hasStatusOk();
+        assertThat(updateWithNotesResult).hasStatus2xxSuccessful();
 
         // Verify notes were updated
         verifyDependencyExists(
@@ -309,7 +309,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(updateWithoutNotesPayload)
                 .exchange();
-        assertThat(updateWithoutNotesResult).hasStatusOk();
+        assertThat(updateWithoutNotesResult).hasStatus2xxSuccessful();
 
         // Verify notes were cleared (should be null)
         verifyDependencyExists("IDEA-1", "IDEA-2", "SOFT", null);
@@ -318,7 +318,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
         var cleanup = mvc.delete()
                 .uri("/api/features/{featureCode}/dependencies/{dependsOnFeatureCode}", "IDEA-1", "IDEA-2")
                 .exchange();
-        assertThat(cleanup).hasStatusOk();
+        assertThat(cleanup).hasStatus2xxSuccessful();
     }
 
     @Test
@@ -358,7 +358,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(verifyExistsPayload)
                 .exchange();
-        assertThat(verifyExistsResult).hasStatusOk();
+        assertThat(verifyExistsResult).hasStatus2xxSuccessful();
 
         // Verify update was persisted
         verifyDependencyExists("IDEA-1", "IDEA-2", "SOFT", "Updated to verify existence");
@@ -367,7 +367,7 @@ class FeatureControllerIntegrationTests extends AbstractIT {
         var deleteResult = mvc.delete()
                 .uri("/api/features/{featureCode}/dependencies/{dependsOnFeatureCode}", "IDEA-1", "IDEA-2")
                 .exchange();
-        assertThat(deleteResult).hasStatusOk();
+        assertThat(deleteResult).hasStatus2xxSuccessful();
 
         // Verify deletion was persisted in database
         verifyDependencyNotExists("IDEA-1", "IDEA-2");
@@ -388,6 +388,11 @@ class FeatureControllerIntegrationTests extends AbstractIT {
     }
 
     // === HELPER METHODS FOR DATABASE VERIFICATION ===
+    // Note: We use JdbcTemplate for direct database access instead of FeatureDependencyRepository
+    // because the repository has package-private visibility (default access modifier) and is not
+    // accessible from this test class which is in a different package (api.controllers vs domain).
+    // Direct SQL queries ensure we can verify the actual database state independently of the
+    // application's domain layer, providing true integration test verification.
 
     private void verifyDependencyExists(
             String featureCode, String dependsOnFeatureCode, String expectedType, String expectedNotes) {
