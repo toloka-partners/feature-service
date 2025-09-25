@@ -2,6 +2,7 @@ package com.sivalabs.ft.features.domain.events;
 
 import com.sivalabs.ft.features.ApplicationProperties;
 import com.sivalabs.ft.features.domain.entities.Feature;
+import com.sivalabs.ft.features.domain.entities.FeatureDependency;
 import java.time.Instant;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -62,5 +63,38 @@ public class EventPublisher {
                 deletedBy,
                 deletedAt);
         kafkaTemplate.send(properties.events().deletedFeatures(), event);
+    }
+
+    public void publishDependencyCreatedEvent(FeatureDependency dependency, String createdBy) {
+        DependencyCreatedEvent event = new DependencyCreatedEvent(
+                dependency.getFeature().getCode(),
+                dependency.getDependsOnFeature().getCode(),
+                dependency.getDependencyType(),
+                dependency.getNotes(),
+                createdBy,
+                dependency.getCreatedAt());
+        kafkaTemplate.send("dependency-events", event);
+    }
+
+    public void publishDependencyUpdatedEvent(FeatureDependency dependency, String updatedBy) {
+        DependencyUpdatedEvent event = new DependencyUpdatedEvent(
+                dependency.getFeature().getCode(),
+                dependency.getDependsOnFeature().getCode(),
+                dependency.getDependencyType(),
+                dependency.getNotes(),
+                updatedBy,
+                Instant.now());
+        kafkaTemplate.send("dependency-events", event);
+    }
+
+    public void publishDependencyDeletedEvent(
+            String featureCode,
+            String dependsOnFeatureCode,
+            com.sivalabs.ft.features.domain.models.DependencyType dependencyType,
+            String notes,
+            String deletedBy) {
+        DependencyDeletedEvent event = new DependencyDeletedEvent(
+                featureCode, dependsOnFeatureCode, dependencyType, notes, deletedBy, Instant.now());
+        kafkaTemplate.send("dependency-events", event);
     }
 }
