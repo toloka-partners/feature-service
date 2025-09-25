@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sivalabs.ft.features.api.GlobalExceptionHandler;
 import com.sivalabs.ft.features.api.models.CreateDependencyPayload;
 import com.sivalabs.ft.features.api.models.UpdateDependencyPayload;
 import com.sivalabs.ft.features.domain.FeatureDependencyService;
@@ -22,11 +23,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(controllers = FeatureDependencyController.class)
+@Import(GlobalExceptionHandler.class)
 class FeatureDependencyControllerTests {
 
     @Autowired
@@ -201,7 +204,56 @@ class FeatureDependencyControllerTests {
                         .with(jwt().jwt(jwt))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
-                .andExpect(status().is5xxServerError());
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(featureDependencyService);
+    }
+
+    @Test
+    void shouldReturnBadRequestForInvalidDependencyType() throws Exception {
+        String featureCode = "FEAT-001";
+        // Create JSON with invalid dependency type
+        String invalidPayload =
+                """
+                {
+                    "dependsOnFeatureCode": "FEAT-002",
+                    "dependencyType": "INVALID_TYPE",
+                    "notes": "Some notes"
+                }
+                """;
+
+        mockMvc.perform(post("/api/features/{featureCode}/dependencies", featureCode)
+                        .with(jwt().jwt(jwt))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidPayload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").exists());
+
+        verifyNoInteractions(featureDependencyService);
+    }
+
+    @Test
+    void shouldReturnBadRequestForInvalidDependencyTypeOnUpdate() throws Exception {
+        String featureCode = "FEAT-001";
+        String dependsOnFeatureCode = "FEAT-002";
+        // Create JSON with invalid dependency type
+        String invalidPayload =
+                """
+                {
+                    "dependencyType": "UNKNOWN_TYPE",
+                    "notes": "Updated notes"
+                }
+                """;
+
+        mockMvc.perform(put(
+                                "/api/features/{featureCode}/dependencies/{dependsOnFeatureCode}",
+                                featureCode,
+                                dependsOnFeatureCode)
+                        .with(jwt().jwt(jwt))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidPayload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").exists());
 
         verifyNoInteractions(featureDependencyService);
     }
