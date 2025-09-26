@@ -290,4 +290,82 @@ class FeatureController {
             return ResponseEntity.notFound().build();
         }
     }
+
+    @GetMapping("/{featureCode}/dependencies")
+    @Operation(
+            summary = "Get all features that this feature depends on",
+            description = "List all features that the specified feature depends on",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class)))),
+                @ApiResponse(responseCode = "404", description = "Feature not found")
+            })
+    ResponseEntity<List<FeatureDto>> getFeatureDependencies(@PathVariable String featureCode) {
+        try {
+            List<FeatureDto> dependencies = featureDependencyService.getFeatureDependencies(featureCode);
+            return ResponseEntity.ok(dependencies);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping("/{featureCode}/dependents")
+    @Operation(
+            summary = "Get all features that depend on this feature",
+            description = "List all features that depend on the specified feature",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class)))),
+                @ApiResponse(responseCode = "404", description = "Feature not found")
+            })
+    ResponseEntity<List<FeatureDto>> getFeatureDependents(@PathVariable String featureCode) {
+        try {
+            List<FeatureDto> dependents = featureDependencyService.getFeatureDependents(featureCode);
+            return ResponseEntity.ok(dependents);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping("/{featureCode}/impact")
+    @Operation(
+            summary = "Analyze the impact of changes to this feature",
+            description = "Provide a comprehensive list of all affected features, with support for filtering",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class)))),
+                @ApiResponse(responseCode = "404", description = "Feature not found"),
+                @ApiResponse(responseCode = "400", description = "Invalid filter parameters")
+            })
+    ResponseEntity<List<FeatureDto>> getFeatureImpact(
+            @PathVariable String featureCode,
+            @RequestParam(value = "productCode", required = false) String productCode,
+            @RequestParam(value = "releaseCode", required = false) String releaseCode,
+            @RequestParam(value = "status", required = false) String status) {
+        try {
+            List<FeatureDto> impact =
+                    featureDependencyService.getFeatureImpact(featureCode, productCode, releaseCode, status);
+            return ResponseEntity.ok(impact);
+        } catch (Exception e) {
+            if (e.getMessage() != null && e.getMessage().contains("Invalid feature status")) {
+                return ResponseEntity.badRequest().build();
+            }
+            return ResponseEntity.notFound().build();
+        }
+    }
 }
