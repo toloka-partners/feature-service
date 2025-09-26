@@ -1,11 +1,11 @@
 package com.sivalabs.ft.features.domain;
 
-import com.sivalabs.ft.features.domain.dtos.FeatureDependencyDto;
+import com.sivalabs.ft.features.domain.dtos.FeatureDto;
 import com.sivalabs.ft.features.domain.entities.Feature;
 import com.sivalabs.ft.features.domain.entities.FeatureDependency;
 import com.sivalabs.ft.features.domain.exceptions.BadRequestException;
 import com.sivalabs.ft.features.domain.exceptions.ResourceNotFoundException;
-import com.sivalabs.ft.features.domain.mappers.FeatureDependencyMapper;
+import com.sivalabs.ft.features.domain.mappers.FeatureMapper;
 import com.sivalabs.ft.features.domain.models.DependencyType;
 import com.sivalabs.ft.features.domain.models.FeatureStatus;
 import java.time.Instant;
@@ -18,15 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class FeatureDependencyService {
     private final FeatureRepository featureRepository;
     private final FeatureDependencyRepository featureDependencyRepository;
-    private final FeatureDependencyMapper featureDependencyMapper;
+    private final FeatureMapper featureMapper;
 
     FeatureDependencyService(
             FeatureRepository featureRepository,
             FeatureDependencyRepository featureDependencyRepository,
-            FeatureDependencyMapper featureDependencyMapper) {
+            FeatureMapper featureMapper) {
         this.featureRepository = featureRepository;
         this.featureDependencyRepository = featureDependencyRepository;
-        this.featureDependencyMapper = featureDependencyMapper;
+        this.featureMapper = featureMapper;
     }
 
     @Transactional
@@ -83,27 +83,33 @@ public class FeatureDependencyService {
     }
 
     @Transactional(readOnly = true)
-    public List<FeatureDependencyDto> getFeatureDependencies(String featureCode) {
+    public List<FeatureDto> getFeatureDependencies(String featureCode) {
         featureRepository
                 .findByCode(featureCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Feature not found with code: " + featureCode));
 
         List<FeatureDependency> dependencies = featureDependencyRepository.findByFeature_Code(featureCode);
-        return dependencies.stream().map(featureDependencyMapper::toDto).collect(Collectors.toList());
+        return dependencies.stream()
+                .map(FeatureDependency::getDependsOnFeature)
+                .map(featureMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public List<FeatureDependencyDto> getFeatureDependents(String featureCode) {
+    public List<FeatureDto> getFeatureDependents(String featureCode) {
         featureRepository
                 .findByCode(featureCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Feature not found with code: " + featureCode));
 
         List<FeatureDependency> dependents = featureDependencyRepository.findByDependsOnFeature_Code(featureCode);
-        return dependents.stream().map(featureDependencyMapper::toDto).collect(Collectors.toList());
+        return dependents.stream()
+                .map(FeatureDependency::getFeature)
+                .map(featureMapper::toDto)
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public List<FeatureDependencyDto> getFeatureImpact(
+    public List<FeatureDto> getFeatureImpact(
             String featureCode, String productCode, String releaseCode, String status) {
         featureRepository
                 .findByCode(featureCode)
@@ -118,10 +124,7 @@ public class FeatureDependencyService {
             return Collections.emptyList();
         }
 
-        List<Feature> impactedFeatures = featureRepository.findAllById(
-                featureRepository.findByCodeIn(new ArrayList<>(impactedFeatureCodes)).stream()
-                        .map(Feature::getId)
-                        .collect(Collectors.toList()));
+        List<Feature> impactedFeatures = featureRepository.findByCodeIn(new ArrayList<>(impactedFeatureCodes));
 
         // Apply filters
         if (productCode != null && !productCode.isBlank()) {
@@ -149,20 +152,8 @@ public class FeatureDependencyService {
             }
         }
 
-        // Convert to DTOs with dependency information
-        List<FeatureDependencyDto> results = new ArrayList<>();
-        for (Feature impactedFeature : impactedFeatures) {
-            List<FeatureDependency> dependencies =
-                    featureDependencyRepository.findByFeature_Code(impactedFeature.getCode());
-            for (FeatureDependency dep : dependencies) {
-                if (impactedFeatureCodes.contains(dep.getDependsOnFeature().getCode())
-                        || featureCode.equals(dep.getDependsOnFeature().getCode())) {
-                    results.add(featureDependencyMapper.toDto(dep));
-                }
-            }
-        }
-
-        return results;
+        // Convert to DTOs
+        return impactedFeatures.stream().map(featureMapper::toDto).collect(Collectors.toList());
     }
 
     private void findAllDependents(String featureCode, Set<String> visited, Set<String> dependents) {

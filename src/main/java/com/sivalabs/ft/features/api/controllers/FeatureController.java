@@ -12,7 +12,6 @@ import com.sivalabs.ft.features.domain.Commands.DeleteFeatureCommand;
 import com.sivalabs.ft.features.domain.Commands.DeleteFeatureDependencyCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateFeatureCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateFeatureDependencyCommand;
-import com.sivalabs.ft.features.domain.dtos.FeatureDependencyDto;
 import com.sivalabs.ft.features.domain.dtos.FeatureDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.headers.Header;
@@ -303,15 +302,12 @@ class FeatureController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        array =
-                                                @ArraySchema(
-                                                        schema =
-                                                                @Schema(implementation = FeatureDependencyDto.class)))),
+                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class)))),
                 @ApiResponse(responseCode = "404", description = "Feature not found")
             })
-    ResponseEntity<List<FeatureDependencyDto>> getFeatureDependencies(@PathVariable String featureCode) {
+    ResponseEntity<List<FeatureDto>> getFeatureDependencies(@PathVariable String featureCode) {
         try {
-            List<FeatureDependencyDto> dependencies = featureDependencyService.getFeatureDependencies(featureCode);
+            List<FeatureDto> dependencies = featureDependencyService.getFeatureDependencies(featureCode);
             return ResponseEntity.ok(dependencies);
         } catch (Exception e) {
             return ResponseEntity.notFound().build();
@@ -329,15 +325,12 @@ class FeatureController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        array =
-                                                @ArraySchema(
-                                                        schema =
-                                                                @Schema(implementation = FeatureDependencyDto.class)))),
+                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class)))),
                 @ApiResponse(responseCode = "404", description = "Feature not found")
             })
-    ResponseEntity<List<FeatureDependencyDto>> getFeatureDependents(@PathVariable String featureCode) {
+    ResponseEntity<List<FeatureDto>> getFeatureDependents(@PathVariable String featureCode) {
         try {
-            List<FeatureDependencyDto> dependents = featureDependencyService.getFeatureDependents(featureCode);
+            List<FeatureDto> dependents = featureDependencyService.getFeatureDependents(featureCode);
             return ResponseEntity.ok(dependents);
         } catch (Exception e) {
             return ResponseEntity.notFound().build();
@@ -355,20 +348,17 @@ class FeatureController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        array =
-                                                @ArraySchema(
-                                                        schema =
-                                                                @Schema(implementation = FeatureDependencyDto.class)))),
+                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class)))),
                 @ApiResponse(responseCode = "404", description = "Feature not found"),
                 @ApiResponse(responseCode = "400", description = "Invalid filter parameters")
             })
-    ResponseEntity<List<FeatureDependencyDto>> getFeatureImpact(
+    ResponseEntity<List<FeatureDto>> getFeatureImpact(
             @PathVariable String featureCode,
             @RequestParam(value = "productCode", required = false) String productCode,
             @RequestParam(value = "releaseCode", required = false) String releaseCode,
             @RequestParam(value = "status", required = false) String status) {
         try {
-            List<FeatureDependencyDto> impact =
+            List<FeatureDto> impact =
                     featureDependencyService.getFeatureImpact(featureCode, productCode, releaseCode, status);
             return ResponseEntity.ok(impact);
         } catch (Exception e) {
