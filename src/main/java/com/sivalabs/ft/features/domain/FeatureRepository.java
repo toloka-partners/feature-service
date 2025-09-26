@@ -28,4 +28,6 @@ interface FeatureRepository extends ListCrudRepository<Feature, Long> {
 
     @Query(value = "select nextval('feature_code_seq')", nativeQuery = true)
     long getNextFeatureId();
+
+    List<Feature> findByCodeIn(List<String> codes);
 }
