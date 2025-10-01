@@ -1,6 +1,16 @@
 package com.sivalabs.ft.features.domain.events;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sivalabs.ft.features.domain.FeatureService;
+import com.sivalabs.ft.features.domain.NotificationRecipientService;
+import com.sivalabs.ft.features.domain.NotificationService;
+import com.sivalabs.ft.features.domain.dtos.FeatureDto;
 import com.sivalabs.ft.features.domain.models.EventType;
+import com.sivalabs.ft.features.domain.models.NotificationEventType;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -20,9 +30,22 @@ public class FeatureEventListener {
     private static final Logger logger = LoggerFactory.getLogger(FeatureEventListener.class);
 
     private final EventDeduplicationService eventDeduplicationService;
+    private final NotificationService notificationService;
+    private final NotificationRecipientService recipientService;
+    private final FeatureService featureService;
+    private final ObjectMapper objectMapper;
 
-    public FeatureEventListener(EventDeduplicationService eventDeduplicationService) {
+    public FeatureEventListener(
+            EventDeduplicationService eventDeduplicationService,
+            NotificationService notificationService,
+            NotificationRecipientService recipientService,
+            FeatureService featureService,
+            ObjectMapper objectMapper) {
         this.eventDeduplicationService = eventDeduplicationService;
+        this.notificationService = notificationService;
+        this.recipientService = recipientService;
+        this.featureService = featureService;
+        this.objectMapper = objectMapper;
     }
 
     @KafkaListener(topics = "${ft.events.new-features}")
@@ -110,13 +133,43 @@ public class FeatureEventListener {
                 event.title(),
                 event.eventId());
 
-        // Example business logic:
-        // - Send notifications
-        // - Update search indexes
-        // - Trigger workflows
-        // - Update analytics
-        // - Send emails to stakeholders
-        // - Update external systems
+        // Get feature from database via service
+        FeatureDto featureDto = featureService
+                .findFeatureByCode(null, event.code())
+                .orElseThrow(() -> new RuntimeException("Feature not found: " + event.code()));
+
+        // Determine notification recipients using NotificationRecipientService
+        Set<String> recipients = recipientService.getFeatureNotificationRecipients(featureDto);
+
+        // Create notifications for each recipient
+        // Use unique eventId per recipient to avoid deduplication issues
+        int recipientIndex = 0;
+        for (String recipientUserId : recipients) {
+            try {
+                Map<String, Object> eventDetails = new HashMap<>();
+                eventDetails.put("action", "created");
+                eventDetails.put("featureCode", event.code());
+                eventDetails.put("title", event.title());
+
+                String eventDetailsJson = objectMapper.writeValueAsString(eventDetails);
+                String link = "/features/" + event.code();
+
+                // Create unique eventId for each recipient to avoid deduplication
+                String notificationEventId = event.eventId() + "-recipient-" + recipientIndex++;
+
+                notificationService.createNotification(
+                        recipientUserId,
+                        notificationEventId,
+                        NotificationEventType.FEATURE_CREATED,
+                        eventDetailsJson,
+                        link);
+
+                logger.debug("Created notification for user {} about feature {}", recipientUserId, event.code());
+            } catch (JsonProcessingException e) {
+                logger.error("Failed to serialize event details for feature {}", event.code(), e);
+            }
+        }
+
         logger.debug("Feature created event processed successfully for: {}", event.code());
     }
 
@@ -130,13 +183,46 @@ public class FeatureEventListener {
                 event.title(),
                 event.eventId());
 
-        // Example business logic:
-        // - Send notifications about updates
-        // - Update search indexes
-        // - Trigger status change workflows
-        // - Update analytics
-        // - Send emails about status changes
-        // - Update external systems
+        // Get feature from database via service
+        FeatureDto featureDto = featureService
+                .findFeatureByCode(null, event.code())
+                .orElseThrow(() -> new RuntimeException("Feature not found: " + event.code()));
+
+        // Determine notification recipients using NotificationRecipientService
+        Set<String> recipients = recipientService.getFeatureNotificationRecipients(featureDto);
+
+        // Create notifications for each recipient
+        // Use unique eventId per recipient to avoid deduplication issues
+        int recipientIndex = 0;
+        for (String recipientUserId : recipients) {
+            try {
+                Map<String, Object> eventDetails = new HashMap<>();
+                eventDetails.put("action", "updated");
+                eventDetails.put("featureCode", event.code());
+                eventDetails.put("title", event.title());
+                if (event.status() != null) {
+                    eventDetails.put("status", event.status().name());
+                }
+
+                String eventDetailsJson = objectMapper.writeValueAsString(eventDetails);
+                String link = "/features/" + event.code();
+
+                // Create unique eventId for each recipient to avoid deduplication
+                String notificationEventId = event.eventId() + "-recipient-" + recipientIndex++;
+
+                notificationService.createNotification(
+                        recipientUserId,
+                        notificationEventId,
+                        NotificationEventType.FEATURE_UPDATED,
+                        eventDetailsJson,
+                        link);
+
+                logger.debug("Created notification for user {} about feature update {}", recipientUserId, event.code());
+            } catch (JsonProcessingException e) {
+                logger.error("Failed to serialize event details for feature {}", event.code(), e);
+            }
+        }
+
         logger.debug("Feature updated event processed successfully for: {}", event.code());
     }
 
@@ -150,13 +236,32 @@ public class FeatureEventListener {
                 event.title(),
                 event.eventId());
 
-        // Example business logic:
-        // - Send notifications about deletion
-        // - Clean up related data
-        // - Update search indexes
-        // - Update analytics
-        // - Send emails about deletion
-        // - Clean up external systems
+        // For deleted features, we can't get from DB, so use event data
+        // Send notification to the user who deleted it (from event)
+        if (event.deletedBy() != null) {
+            try {
+                Map<String, Object> eventDetails = new HashMap<>();
+                eventDetails.put("action", "deleted");
+                eventDetails.put("featureCode", event.code());
+                eventDetails.put("title", event.title());
+
+                String eventDetailsJson = objectMapper.writeValueAsString(eventDetails);
+                String link = "/features/" + event.code();
+
+                notificationService.createNotification(
+                        event.deletedBy(),
+                        event.eventId(),
+                        NotificationEventType.FEATURE_DELETED,
+                        eventDetailsJson,
+                        link);
+
+                logger.debug(
+                        "Created notification for user {} about feature deletion {}", event.deletedBy(), event.code());
+            } catch (JsonProcessingException e) {
+                logger.error("Failed to serialize event details for feature {}", event.code(), e);
+            }
+        }
+
         logger.debug("Feature deleted event processed successfully for: {}", event.code());
     }
 }
