@@ -73,7 +73,7 @@ public class FeatureEventListener {
         });
     }
 
-    @KafkaListener(topics = "${ft.events.updated-features}", groupId = "feature-service-group")
+    @KafkaListener(topics = "${ft.events.updated-features}")
     @Transactional
     public void handleFeatureUpdatedEvent(
             @Payload FeatureUpdatedEvent event,
@@ -98,7 +98,7 @@ public class FeatureEventListener {
         });
     }
 
-    @KafkaListener(topics = "${ft.events.deleted-features}", groupId = "feature-service-group")
+    @KafkaListener(topics = "${ft.events.deleted-features}")
     @Transactional
     public void handleFeatureDeletedEvent(
             @Payload FeatureDeletedEvent event,
@@ -127,16 +127,16 @@ public class FeatureEventListener {
      * Process feature created event - implement your business logic here
      */
     private void processFeatureCreatedEvent(FeatureCreatedEvent event) {
+        // Get feature from database via service FIRST (before logging business logic)
+        FeatureDto featureDto = featureService
+                .findFeatureByCode(null, event.code())
+                .orElseThrow(() -> new RuntimeException("Feature not found: " + event.code()));
+
         logger.info(
                 "EventListener business logic: Processing feature created: {} - {} (eventId: {})",
                 event.code(),
                 event.title(),
                 event.eventId());
-
-        // Get feature from database via service
-        FeatureDto featureDto = featureService
-                .findFeatureByCode(null, event.code())
-                .orElseThrow(() -> new RuntimeException("Feature not found: " + event.code()));
 
         // Determine notification recipients using NotificationRecipientService
         Set<String> recipients = recipientService.getFeatureNotificationRecipients(featureDto);
@@ -177,16 +177,16 @@ public class FeatureEventListener {
      * Process feature updated event - implement your business logic here
      */
     private void processFeatureUpdatedEvent(FeatureUpdatedEvent event) {
+        // Get feature from database via service FIRST (before logging business logic)
+        FeatureDto featureDto = featureService
+                .findFeatureByCode(null, event.code())
+                .orElseThrow(() -> new RuntimeException("Feature not found: " + event.code()));
+
         logger.info(
                 "EventListener business logic: Processing feature updated: {} - {} (eventId: {})",
                 event.code(),
                 event.title(),
                 event.eventId());
-
-        // Get feature from database via service
-        FeatureDto featureDto = featureService
-                .findFeatureByCode(null, event.code())
-                .orElseThrow(() -> new RuntimeException("Feature not found: " + event.code()));
 
         // Determine notification recipients using NotificationRecipientService
         Set<String> recipients = recipientService.getFeatureNotificationRecipients(featureDto);
