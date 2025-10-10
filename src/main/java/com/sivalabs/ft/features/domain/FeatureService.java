@@ -84,6 +84,19 @@ public class FeatureService {
         return updateFavoriteStatus(features, username);
     }
 
+    @Transactional(readOnly = true)
+    public List<FeatureDto> findFeaturesByCategories(String username, List<Long> categoryIds) {
+        List<Feature> features = featureRepository.findByCategoryIds(categoryIds);
+        return updateFavoriteStatus(features, username);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FeatureDto> findFeaturesByCategoriesAndTags(
+            String username, List<Long> categoryIds, List<Long> tagIds) {
+        List<Feature> features = featureRepository.findByCategoryIdsAndTagIds(categoryIds, tagIds);
+        return updateFavoriteStatus(features, username);
+    }
+
     private List<FeatureDto> updateFavoriteStatus(List<Feature> features, String username) {
         if (username == null || features.isEmpty()) {
             return features.stream().map(featureMapper::toDto).toList();

@@ -53,9 +53,10 @@ class FeatureController {
 
     @GetMapping("")
     @Operation(
-            summary = "Find features by product, release, or tags",
-            description =
-                    "Find features by product, release, or tags. If tagIds is provided, returns all features matching any of the given tags. Otherwise, returns features by product or release.",
+            summary = "Find features by product, release, tags, or categories with tags",
+            description = "Find features by product, release, tags, or combination of categories and tags. "
+                    + "Only one of the following is allowed: productCode, releaseCode, tagIds, or (categoryIds + tagIds). "
+                    + "If categoryIds and tagIds are both provided, returns features matching both criteria.",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
@@ -63,33 +64,50 @@ class FeatureController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class))))
+                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class)))),
+                @ApiResponse(responseCode = "400", description = "Invalid request - multiple search criteria provided")
             })
     List<FeatureDto> getFeatures(
             @RequestParam(value = "productCode", required = false) String productCode,
             @RequestParam(value = "releaseCode", required = false) String releaseCode,
-            @RequestParam(value = "tagIds", required = false) List<Long> tagIds) {
+            @RequestParam(value = "tagIds", required = false) List<Long> tagIds,
+            @RequestParam(value = "categoryIds", required = false) List<Long> categoryIds) {
         String username = SecurityUtils.getCurrentUsername();
 
-        // Only one of productCode or releaseCode or tagIds should be provided
-        if ((StringUtils.isBlank(productCode)
-                        && StringUtils.isBlank(releaseCode)
-                        && (tagIds == null || tagIds.isEmpty()))
-                || (StringUtils.isNotBlank(productCode)
-                        && StringUtils.isNotBlank(releaseCode)
-                        && tagIds != null
-                        && !tagIds.isEmpty())) {
-            // TODO: Return 400 Bad Request
-            return List.of();
+        boolean hasProductCode = StringUtils.isNotBlank(productCode);
+        boolean hasReleaseCode = StringUtils.isNotBlank(releaseCode);
+        boolean hasTagIds = tagIds != null && !tagIds.isEmpty();
+        boolean hasCategoryIds = categoryIds != null && !categoryIds.isEmpty();
+
+        // Validate that only one search criterion is provided
+        // Exception: categoryIds and tagIds can be used together
+        int criteriaCount = 0;
+        if (hasProductCode) criteriaCount++;
+        if (hasReleaseCode) criteriaCount++;
+        if (hasTagIds && !hasCategoryIds) criteriaCount++;
+        if (hasCategoryIds) criteriaCount++;
+
+        if (criteriaCount == 0) {
+            throw new com.sivalabs.ft.features.domain.exceptions.BadRequestException(
+                    "At least one search parameter must be provided: productCode, releaseCode, tagIds, or categoryIds");
         }
+        if (criteriaCount > 1) {
+            throw new com.sivalabs.ft.features.domain.exceptions.BadRequestException(
+                    "Only one search criterion is allowed: productCode, releaseCode, tagIds alone, or (categoryIds with optional tagIds)");
+        }
+
         List<FeatureDto> featureDtos = List.of();
-        if (StringUtils.isNotBlank(productCode)) {
+        if (hasProductCode) {
             featureDtos = featureService.findFeaturesByProduct(username, productCode);
-        }
-        if (StringUtils.isNotBlank(releaseCode)) {
+        } else if (hasReleaseCode) {
             featureDtos = featureService.findFeaturesByRelease(username, releaseCode);
-        }
-        if (tagIds != null && !tagIds.isEmpty()) {
+        } else if (hasCategoryIds) {
+            if (hasTagIds) {
+                featureDtos = featureService.findFeaturesByCategoriesAndTags(username, categoryIds, tagIds);
+            } else {
+                featureDtos = featureService.findFeaturesByCategories(username, categoryIds);
+            }
+        } else if (hasTagIds) {
             featureDtos = featureService.findFeaturesByTags(username, tagIds);
         }
 

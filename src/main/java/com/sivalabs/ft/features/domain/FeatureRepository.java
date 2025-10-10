@@ -20,6 +20,13 @@ interface FeatureRepository extends ListCrudRepository<Feature, Long> {
     @Query("select distinct f from Feature f left join fetch f.release join f.tags t where t.id in :tagIds")
     List<Feature> findByTagIds(List<Long> tagIds);
 
+    @Query("select distinct f from Feature f left join fetch f.release where f.category.id in :categoryIds")
+    List<Feature> findByCategoryIds(List<Long> categoryIds);
+
+    @Query(
+            "select distinct f from Feature f left join fetch f.release left join f.tags t where f.category.id in :categoryIds or t.id in :tagIds")
+    List<Feature> findByCategoryIdsAndTagIds(List<Long> categoryIds, List<Long> tagIds);
+
     @Modifying
     void deleteByCode(String code);
 
