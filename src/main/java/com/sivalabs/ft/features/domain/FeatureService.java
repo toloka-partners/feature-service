@@ -199,6 +199,21 @@ public class FeatureService {
         }
     }
 
+    @Transactional
+    public void removeCategoryFromFeatures(Commands.RemoveCategoryFromFeaturesCommand cmd) {
+        // Get the features
+        List<Feature> features = getFeatures(cmd.featureCodes());
+
+        // Remove category from each feature
+        for (Feature feature : features) {
+            feature.setCategory(null);
+            feature.setUpdatedBy(cmd.updatedBy());
+            feature.setUpdatedAt(Instant.now());
+            featureRepository.save(feature);
+            eventPublisher.publishFeatureUpdatedEvent(feature);
+        }
+    }
+
     private List<Feature> getFeatures(List<String> featureCodes) {
         List<Feature> features = new ArrayList<>();
 
