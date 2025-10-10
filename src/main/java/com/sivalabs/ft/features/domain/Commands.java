@@ -56,6 +56,8 @@ public class Commands {
 
     public record RemoveTagsFromFeaturesCommand(List<String> featureCodes, List<Long> tagIds, String updatedBy) {}
 
+    public record AssignCategoryToFeaturesCommand(List<String> featureCodes, Long categoryId, String updatedBy) {}
+
     /* Category Commands */
     public record CreateCategoryCommand(String name, String description, Long parentCategoryId, String createdBy) {}
 

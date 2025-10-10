@@ -1,11 +1,13 @@
 package com.sivalabs.ft.features.domain;
 
+import com.sivalabs.ft.features.domain.Commands.AssignCategoryToFeaturesCommand;
 import com.sivalabs.ft.features.domain.Commands.AssignTagsToFeaturesCommand;
 import com.sivalabs.ft.features.domain.Commands.CreateFeatureCommand;
 import com.sivalabs.ft.features.domain.Commands.DeleteFeatureCommand;
 import com.sivalabs.ft.features.domain.Commands.RemoveTagsFromFeaturesCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateFeatureCommand;
 import com.sivalabs.ft.features.domain.dtos.FeatureDto;
+import com.sivalabs.ft.features.domain.entities.Category;
 import com.sivalabs.ft.features.domain.entities.Feature;
 import com.sivalabs.ft.features.domain.entities.Product;
 import com.sivalabs.ft.features.domain.entities.Release;
@@ -32,6 +34,7 @@ public class FeatureService {
     private final FeatureRepository featureRepository;
     private final ProductRepository productRepository;
     private final TagRepository tagRepository;
+    private final CategoryRepository categoryRepository;
     private final FavoriteFeatureRepository favoriteFeatureRepository;
     private final EventPublisher eventPublisher;
     private final FeatureMapper featureMapper;
@@ -42,6 +45,7 @@ public class FeatureService {
             FeatureRepository featureRepository,
             ProductRepository productRepository,
             TagRepository tagRepository,
+            CategoryRepository categoryRepository,
             FavoriteFeatureRepository favoriteFeatureRepository,
             EventPublisher eventPublisher,
             FeatureMapper featureMapper) {
@@ -50,6 +54,7 @@ public class FeatureService {
         this.featureRepository = featureRepository;
         this.productRepository = productRepository;
         this.tagRepository = tagRepository;
+        this.categoryRepository = categoryRepository;
         this.eventPublisher = eventPublisher;
         this.favoriteFeatureRepository = favoriteFeatureRepository;
         this.featureMapper = featureMapper;
@@ -173,6 +178,23 @@ public class FeatureService {
         // Remove tags from each feature
         for (Feature feature : features) {
             tags.forEach(feature.getTags()::remove);
+            feature.setUpdatedBy(cmd.updatedBy());
+            feature.setUpdatedAt(Instant.now());
+            featureRepository.save(feature);
+            eventPublisher.publishFeatureUpdatedEvent(feature);
+        }
+    }
+
+    @Transactional
+    public void assignCategoryToFeatures(AssignCategoryToFeaturesCommand cmd) {
+        List<Feature> features = this.getFeatures(cmd.featureCodes());
+        Category category = categoryRepository
+                .findById(cmd.categoryId())
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + cmd.categoryId()));
+
+        // Assign category to each feature
+        for (Feature feature : features) {
+            feature.setCategory(category);
             feature.setUpdatedBy(cmd.updatedBy());
             feature.setUpdatedAt(Instant.now());
             featureRepository.save(feature);
