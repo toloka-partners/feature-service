@@ -1,3 +1,4 @@
+delete from usage_events;
 delete from favorite_features;
 delete from comments;
 delete from features;
@@ -34,3 +35,14 @@ insert into comments (id, feature_id, created_by, content) values
 (1, 1, 'user', 'This is a comment on feature IDEA-1'),
 (2,  1, 'user', 'This is a comment on feature IDEA-2'),
 (3, 1, 'user', 'This is a comment on feature GO-3');
+
+insert into usage_events (id, feature_code, product_code, user_id, event_type, metadata, created_at) values
+(1, 'IDEA-1', 'intellij', 'user1', 'VIEWED', '{"source": "web"}', '2024-03-01 10:00:00'),
+(2, 'IDEA-1', 'intellij', 'user2', 'VIEWED', '{"source": "web"}', '2024-03-01 11:00:00'),
+(3, 'IDEA-1', 'intellij', 'user1', 'FAVORITED', '{"source": "web"}', '2024-03-01 12:00:00'),
+(4, 'IDEA-1', 'intellij', 'user2', 'COMMENTED', '{"source": "mobile"}', '2024-03-01 13:00:00'),
+(5, 'IDEA-2', 'intellij', 'user1', 'VIEWED', '{"source": "web"}', '2024-03-02 10:00:00'),
+(6, 'IDEA-2', 'intellij', 'user1', 'UPDATED', '{"source": "web"}', '2024-03-02 11:00:00'),
+(7, 'GO-3', 'goland', 'user1', 'VIEWED', '{"source": "web"}', '2024-03-03 10:00:00'),
+(8, 'GO-3', 'goland', 'user2', 'VIEWED', '{"source": "web"}', '2024-03-03 11:00:00'),
+(9, 'GO-3', 'goland', 'user3', 'VIEWED', '{"source": "desktop"}', '2024-03-03 12:00:00');
