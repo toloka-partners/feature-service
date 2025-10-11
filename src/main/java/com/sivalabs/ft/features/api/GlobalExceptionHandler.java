@@ -5,9 +5,12 @@ import static org.springframework.http.HttpStatus.*;
 import com.sivalabs.ft.features.domain.exceptions.BadRequestException;
 import com.sivalabs.ft.features.domain.exceptions.ResourceNotFoundException;
 import java.time.Instant;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ProblemDetail;
+import org.springframework.validation.ObjectError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -15,6 +18,19 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    ProblemDetail handle(MethodArgumentNotValidException e) {
+        log.error("Validation failed", e);
+        List<String> errors = e.getBindingResult().getAllErrors().stream()
+                .map(ObjectError::getDefaultMessage)
+                .toList();
+        String errorMessage = String.join(", ", errors);
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(BAD_REQUEST, errorMessage);
+        problemDetail.setTitle("Validation failed");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
 
     @ExceptionHandler(Exception.class)
     ProblemDetail handle(Exception e) {

@@ -22,9 +22,9 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT ue FROM UsageEvent ue
             WHERE ue.featureCode = :featureCode
-            AND (:eventType IS NULL OR ue.eventType = :eventType)
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.eventType = COALESCE(:eventType, ue.eventType)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             ORDER BY ue.createdAt DESC
             """)
     List<UsageEvent> findByFeatureCodeWithFilters(
@@ -37,9 +37,9 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT ue FROM UsageEvent ue
             WHERE ue.productCode = :productCode
-            AND (:eventType IS NULL OR ue.eventType = :eventType)
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.eventType = COALESCE(:eventType, ue.eventType)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             ORDER BY ue.createdAt DESC
             """)
     List<UsageEvent> findByProductCodeWithFilters(
@@ -52,8 +52,8 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT COUNT(ue) FROM UsageEvent ue
             WHERE ue.featureCode = :featureCode
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             """)
     Long countByFeatureCode(
             @Param("featureCode") String featureCode,
@@ -64,8 +64,8 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT COUNT(DISTINCT ue.userId) FROM UsageEvent ue
             WHERE ue.featureCode = :featureCode
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             """)
     Long countDistinctUsersByFeatureCode(
             @Param("featureCode") String featureCode,
@@ -76,8 +76,8 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT COUNT(ue) FROM UsageEvent ue
             WHERE ue.productCode = :productCode
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             """)
     Long countByProductCode(
             @Param("productCode") String productCode,
@@ -88,8 +88,8 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT COUNT(DISTINCT ue.userId) FROM UsageEvent ue
             WHERE ue.productCode = :productCode
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             """)
     Long countDistinctUsersByProductCode(
             @Param("productCode") String productCode,
@@ -100,8 +100,8 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT COUNT(DISTINCT ue.featureCode) FROM UsageEvent ue
             WHERE ue.productCode = :productCode
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             """)
     Long countDistinctFeaturesByProductCode(
             @Param("productCode") String productCode,
@@ -112,8 +112,8 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT MIN(ue.createdAt) FROM UsageEvent ue
             WHERE ue.featureCode = :featureCode
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             """)
     Instant findFirstEventTimeByFeatureCode(
             @Param("featureCode") String featureCode,
@@ -124,8 +124,8 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT MAX(ue.createdAt) FROM UsageEvent ue
             WHERE ue.featureCode = :featureCode
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             """)
     Instant findLastEventTimeByFeatureCode(
             @Param("featureCode") String featureCode,
@@ -136,8 +136,8 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT MIN(ue.createdAt) FROM UsageEvent ue
             WHERE ue.productCode = :productCode
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             """)
     Instant findFirstEventTimeByProductCode(
             @Param("productCode") String productCode,
@@ -148,8 +148,8 @@ interface UsageEventRepository extends ListCrudRepository<UsageEvent, Long> {
             """
             SELECT MAX(ue.createdAt) FROM UsageEvent ue
             WHERE ue.productCode = :productCode
-            AND (:startDate IS NULL OR ue.createdAt >= :startDate)
-            AND (:endDate IS NULL OR ue.createdAt <= :endDate)
+            AND ue.createdAt >= COALESCE(:startDate, ue.createdAt)
+            AND ue.createdAt <= COALESCE(:endDate, ue.createdAt)
             """)
     Instant findLastEventTimeByProductCode(
             @Param("productCode") String productCode,
