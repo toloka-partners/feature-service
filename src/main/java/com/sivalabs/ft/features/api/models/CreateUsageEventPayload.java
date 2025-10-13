@@ -1,11 +1,10 @@
 package com.sivalabs.ft.features.api.models;
 
-import com.sivalabs.ft.features.domain.models.UsageEventType;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 public record CreateUsageEventPayload(
-        @NotEmpty(message = "Feature code is required") String featureCode,
-        @NotEmpty(message = "Product code is required") String productCode,
-        @NotNull(message = "Event type is required") UsageEventType eventType,
+        @NotBlank(message = "Feature code is required") String featureCode,
+        @NotBlank(message = "Product code is required") String productCode,
+        @NotBlank(message = "Event type is required") @Pattern(regexp = "^[A-Z_]+$", message = "Event type must be uppercase letters and underscores only") String eventType,
         String metadata) {}

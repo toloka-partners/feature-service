@@ -6,7 +6,6 @@ import com.sivalabs.ft.features.domain.UsageEventService;
 import com.sivalabs.ft.features.domain.dtos.FeatureUsageStatsDto;
 import com.sivalabs.ft.features.domain.dtos.ProductUsageStatsDto;
 import com.sivalabs.ft.features.domain.dtos.UsageEventDto;
-import com.sivalabs.ft.features.domain.models.UsageEventType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -89,7 +88,7 @@ class UsageController {
             })
     ResponseEntity<FeatureUsageStatsDto> getFeatureUsageStats(
             @PathVariable String featureCode,
-            @RequestParam(required = false) UsageEventType eventType,
+            @RequestParam(required = false) String eventType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         log.info("Getting usage stats for feature {}", featureCode);
@@ -110,7 +109,7 @@ class UsageController {
             })
     ResponseEntity<List<UsageEventDto>> getFeatureUsageEvents(
             @PathVariable String featureCode,
-            @RequestParam(required = false) UsageEventType eventType,
+            @RequestParam(required = false) String eventType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         log.info("Getting usage events for feature {}", featureCode);
@@ -138,7 +137,7 @@ class UsageController {
             })
     ResponseEntity<ProductUsageStatsDto> getProductUsageStats(
             @PathVariable String productCode,
-            @RequestParam(required = false) UsageEventType eventType,
+            @RequestParam(required = false) String eventType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         log.info("Getting usage stats for product {}", productCode);
@@ -159,7 +158,7 @@ class UsageController {
             })
     ResponseEntity<List<UsageEventDto>> getProductUsageEvents(
             @PathVariable String productCode,
-            @RequestParam(required = false) UsageEventType eventType,
+            @RequestParam(required = false) String eventType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         log.info("Getting usage events for product {}", productCode);

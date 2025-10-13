@@ -7,7 +7,6 @@ import com.sivalabs.ft.features.domain.entities.UsageEvent;
 import com.sivalabs.ft.features.domain.exceptions.BadRequestException;
 import com.sivalabs.ft.features.domain.exceptions.ResourceNotFoundException;
 import com.sivalabs.ft.features.domain.mappers.UsageEventMapper;
-import com.sivalabs.ft.features.domain.models.UsageEventType;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -18,31 +17,31 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class UsageEventService {
     private final UsageEventRepository usageEventRepository;
-    private final FeatureRepository featureRepository;
-    private final ProductRepository productRepository;
+    private final FeatureService featureService;
+    private final ProductService productService;
     private final UsageEventMapper usageEventMapper;
 
     UsageEventService(
             UsageEventRepository usageEventRepository,
-            FeatureRepository featureRepository,
-            ProductRepository productRepository,
+            FeatureService featureService,
+            ProductService productService,
             UsageEventMapper usageEventMapper) {
         this.usageEventRepository = usageEventRepository;
-        this.featureRepository = featureRepository;
-        this.productRepository = productRepository;
+        this.featureService = featureService;
+        this.productService = productService;
         this.usageEventMapper = usageEventMapper;
     }
 
     @Transactional
     public UsageEventDto createUsageEvent(
-            String featureCode, String productCode, UsageEventType eventType, String metadata, String userId) {
+            String featureCode, String productCode, String eventType, String metadata, String userId) {
         // Validate feature exists
-        if (!featureRepository.existsByCode(featureCode)) {
+        if (!featureService.isFeatureExists(featureCode)) {
             throw new ResourceNotFoundException("Feature with code " + featureCode + " not found");
         }
 
         // Validate product exists
-        if (!productRepository.existsByCode(productCode)) {
+        if (!productService.existsByCode(productCode)) {
             throw new ResourceNotFoundException("Product with code " + productCode + " not found");
         }
 
@@ -60,55 +59,62 @@ public class UsageEventService {
 
     @Transactional(readOnly = true)
     public FeatureUsageStatsDto getFeatureUsageStats(
-            String featureCode, UsageEventType eventType, Instant startDate, Instant endDate) {
+            String featureCode, String eventType, Instant startDate, Instant endDate) {
         // Validate feature exists
-        if (!featureRepository.existsByCode(featureCode)) {
+        if (!featureService.isFeatureExists(featureCode)) {
             throw new ResourceNotFoundException("Feature with code " + featureCode + " not found");
         }
 
-        // Validate date range
-        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            throw new BadRequestException("startDate cannot be after endDate");
-        }
+        validateDateRange(startDate, endDate);
 
-        // Get events for calculating event type distribution
+        // Get events for calculating statistics
         List<UsageEvent> events =
-                usageEventRepository.findByFeatureCodeWithFilters(featureCode, null, startDate, endDate);
+                usageEventRepository.findByFeatureCodeWithFilters(featureCode, eventType, startDate, endDate);
 
-        // Calculate statistics
-        Long totalEvents = usageEventRepository.countByFeatureCode(featureCode, startDate, endDate);
-        Long uniqueUsers = usageEventRepository.countDistinctUsersByFeatureCode(featureCode, startDate, endDate);
+        // Calculate statistics from filtered events
+        Long totalEvents = (long) events.size();
+        Long uniqueUsers = events.stream().map(UsageEvent::getUserId).distinct().count();
         Map<String, Long> eventsByType = calculateEventsByType(events);
-        Instant firstEventAt = usageEventRepository.findFirstEventTimeByFeatureCode(featureCode, startDate, endDate);
-        Instant lastEventAt = usageEventRepository.findLastEventTimeByFeatureCode(featureCode, startDate, endDate);
+        Instant firstEventAt = events.stream()
+                .map(UsageEvent::getCreatedAt)
+                .min(Instant::compareTo)
+                .orElse(null);
+        Instant lastEventAt = events.stream()
+                .map(UsageEvent::getCreatedAt)
+                .max(Instant::compareTo)
+                .orElse(null);
 
         return new FeatureUsageStatsDto(featureCode, totalEvents, uniqueUsers, eventsByType, firstEventAt, lastEventAt);
     }
 
     @Transactional(readOnly = true)
     public ProductUsageStatsDto getProductUsageStats(
-            String productCode, UsageEventType eventType, Instant startDate, Instant endDate) {
+            String productCode, String eventType, Instant startDate, Instant endDate) {
         // Validate product exists
-        if (!productRepository.existsByCode(productCode)) {
+        if (!productService.existsByCode(productCode)) {
             throw new ResourceNotFoundException("Product with code " + productCode + " not found");
         }
 
-        // Validate date range
-        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            throw new BadRequestException("startDate cannot be after endDate");
-        }
+        validateDateRange(startDate, endDate);
 
-        // Get events for calculating event type distribution
+        // Get events for calculating statistics
         List<UsageEvent> events =
-                usageEventRepository.findByProductCodeWithFilters(productCode, null, startDate, endDate);
+                usageEventRepository.findByProductCodeWithFilters(productCode, eventType, startDate, endDate);
 
-        // Calculate statistics
-        Long totalEvents = usageEventRepository.countByProductCode(productCode, startDate, endDate);
-        Long uniqueUsers = usageEventRepository.countDistinctUsersByProductCode(productCode, startDate, endDate);
-        Long uniqueFeatures = usageEventRepository.countDistinctFeaturesByProductCode(productCode, startDate, endDate);
+        // Calculate statistics from filtered events
+        Long totalEvents = (long) events.size();
+        Long uniqueUsers = events.stream().map(UsageEvent::getUserId).distinct().count();
+        Long uniqueFeatures =
+                events.stream().map(UsageEvent::getFeatureCode).distinct().count();
         Map<String, Long> eventsByType = calculateEventsByType(events);
-        Instant firstEventAt = usageEventRepository.findFirstEventTimeByProductCode(productCode, startDate, endDate);
-        Instant lastEventAt = usageEventRepository.findLastEventTimeByProductCode(productCode, startDate, endDate);
+        Instant firstEventAt = events.stream()
+                .map(UsageEvent::getCreatedAt)
+                .min(Instant::compareTo)
+                .orElse(null);
+        Instant lastEventAt = events.stream()
+                .map(UsageEvent::getCreatedAt)
+                .max(Instant::compareTo)
+                .orElse(null);
 
         return new ProductUsageStatsDto(
                 productCode, totalEvents, uniqueUsers, uniqueFeatures, eventsByType, firstEventAt, lastEventAt);
@@ -116,16 +122,13 @@ public class UsageEventService {
 
     @Transactional(readOnly = true)
     public List<UsageEventDto> getFeatureUsageEvents(
-            String featureCode, UsageEventType eventType, Instant startDate, Instant endDate) {
+            String featureCode, String eventType, Instant startDate, Instant endDate) {
         // Validate feature exists
-        if (!featureRepository.existsByCode(featureCode)) {
+        if (!featureService.isFeatureExists(featureCode)) {
             throw new ResourceNotFoundException("Feature with code " + featureCode + " not found");
         }
 
-        // Validate date range
-        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            throw new BadRequestException("startDate cannot be after endDate");
-        }
+        validateDateRange(startDate, endDate);
 
         List<UsageEvent> events =
                 usageEventRepository.findByFeatureCodeWithFilters(featureCode, eventType, startDate, endDate);
@@ -134,26 +137,29 @@ public class UsageEventService {
 
     @Transactional(readOnly = true)
     public List<UsageEventDto> getProductUsageEvents(
-            String productCode, UsageEventType eventType, Instant startDate, Instant endDate) {
+            String productCode, String eventType, Instant startDate, Instant endDate) {
         // Validate product exists
-        if (!productRepository.existsByCode(productCode)) {
+        if (!productService.existsByCode(productCode)) {
             throw new ResourceNotFoundException("Product with code " + productCode + " not found");
         }
 
-        // Validate date range
-        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            throw new BadRequestException("startDate cannot be after endDate");
-        }
+        validateDateRange(startDate, endDate);
 
         List<UsageEvent> events =
                 usageEventRepository.findByProductCodeWithFilters(productCode, eventType, startDate, endDate);
         return events.stream().map(usageEventMapper::toDto).toList();
     }
 
+    private void validateDateRange(Instant startDate, Instant endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new BadRequestException("startDate cannot be after endDate");
+        }
+    }
+
     private Map<String, Long> calculateEventsByType(List<UsageEvent> events) {
         Map<String, Long> eventsByType = new HashMap<>();
         for (UsageEvent event : events) {
-            String type = event.getEventType().name();
+            String type = event.getEventType();
             eventsByType.put(type, eventsByType.getOrDefault(type, 0L) + 1);
         }
         return eventsByType;

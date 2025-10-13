@@ -1,16 +1,15 @@
 package com.sivalabs.ft.features.domain.entities;
 
-import com.sivalabs.ft.features.domain.models.UsageEventType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import org.hibernate.annotations.ColumnDefault;
@@ -33,9 +32,8 @@ public class UsageEvent {
     @Size(max = 255) @NotNull @Column(name = "user_id", nullable = false)
     private String userId;
 
-    @NotNull @Column(name = "event_type", nullable = false, length = 50)
-    @Enumerated(EnumType.STRING)
-    private UsageEventType eventType;
+    @NotBlank @Size(max = 50) @Pattern(regexp = "^[A-Z_]+$", message = "Event type must be uppercase with underscores") @Column(name = "event_type", nullable = false, length = 50)
+    private String eventType;
 
     @Column(name = "metadata", length = Integer.MAX_VALUE)
     private String metadata;
@@ -76,11 +74,11 @@ public class UsageEvent {
         this.userId = userId;
     }
 
-    public UsageEventType getEventType() {
+    public String getEventType() {
         return eventType;
     }
 
-    public void setEventType(UsageEventType eventType) {
+    public void setEventType(String eventType) {
         this.eventType = eventType;
     }
 

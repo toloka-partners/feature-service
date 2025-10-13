@@ -31,6 +31,11 @@ public class ProductService {
         return productRepository.findByCode(code).map(productMapper::toDto);
     }
 
+    @Transactional(readOnly = true)
+    public boolean existsByCode(String code) {
+        return productRepository.existsByCode(code);
+    }
+
     @Transactional
     public Long createProduct(CreateProductCommand cmd) {
         var product = new Product();

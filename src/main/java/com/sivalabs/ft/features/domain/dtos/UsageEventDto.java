@@ -1,6 +1,5 @@
 package com.sivalabs.ft.features.domain.dtos;
 
-import com.sivalabs.ft.features.domain.models.UsageEventType;
 import java.io.Serializable;
 import java.time.Instant;
 
@@ -9,7 +8,7 @@ public record UsageEventDto(
         String featureCode,
         String productCode,
         String userId,
-        UsageEventType eventType,
+        String eventType,
         String metadata,
         Instant createdAt)
         implements Serializable {}

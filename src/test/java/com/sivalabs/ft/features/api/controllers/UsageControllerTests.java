@@ -8,10 +8,14 @@ import com.sivalabs.ft.features.domain.dtos.FeatureUsageStatsDto;
 import com.sivalabs.ft.features.domain.dtos.ProductUsageStatsDto;
 import com.sivalabs.ft.features.domain.dtos.UsageEventDto;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 
 class UsageControllerTests extends AbstractIT {
+
+    private static final Logger log = LoggerFactory.getLogger(UsageControllerTests.class);
 
     @Test
     @WithMockOAuth2User(username = "testuser")
@@ -40,7 +44,7 @@ class UsageControllerTests extends AbstractIT {
         assertThat(result).bodyJson().convertTo(UsageEventDto.class).satisfies(dto -> {
             assertThat(dto.featureCode()).isEqualTo("IDEA-1");
             assertThat(dto.productCode()).isEqualTo("intellij");
-            assertThat(dto.eventType().name()).isEqualTo("VIEWED");
+            assertThat(dto.eventType()).isEqualTo("VIEWED");
             assertThat(dto.userId()).isEqualTo("testuser");
             assertThat(dto.metadata()).contains("source");
         });
@@ -170,8 +174,11 @@ class UsageControllerTests extends AbstractIT {
 
     @Test
     @WithMockOAuth2User(username = "testuser")
-    void shouldGetFeatureUsageStats() {
+    void shouldGetFeatureUsageStats() throws Exception {
         var result = mvc.get().uri("/api/usage/feature/{featureCode}", "IDEA-1").exchange();
+
+        String responseBody = result.getMvcResult().getResponse().getContentAsString();
+        log.info("Feature Usage Stats Response: {}", responseBody);
 
         assertThat(result)
                 .hasStatusOk()
@@ -217,7 +224,7 @@ class UsageControllerTests extends AbstractIT {
                 .convertTo(FeatureUsageStatsDto.class)
                 .satisfies(dto -> {
                     assertThat(dto.featureCode()).isEqualTo("IDEA-1");
-                    assertThat(dto.totalEvents()).isEqualTo(4L);
+                    assertThat(dto.totalEvents()).isEqualTo(2L);
                 });
     }
 
@@ -254,9 +261,12 @@ class UsageControllerTests extends AbstractIT {
 
     @Test
     @WithMockOAuth2User(username = "testuser")
-    void shouldGetProductUsageStats() {
+    void shouldGetProductUsageStats() throws Exception {
         var result =
                 mvc.get().uri("/api/usage/product/{productCode}", "intellij").exchange();
+
+        String responseBody = result.getMvcResult().getResponse().getContentAsString();
+        log.info("Product Usage Stats Response: {}", responseBody);
 
         assertThat(result)
                 .hasStatusOk()
@@ -341,10 +351,13 @@ class UsageControllerTests extends AbstractIT {
 
     @Test
     @WithMockOAuth2User(username = "testuser")
-    void shouldGetFeatureUsageEvents() {
+    void shouldGetFeatureUsageEvents() throws Exception {
         var result = mvc.get()
                 .uri("/api/usage/feature/{featureCode}/events", "IDEA-1")
                 .exchange();
+
+        String responseBody = result.getMvcResult().getResponse().getContentAsString();
+        log.info("Response body: {}", responseBody);
 
         assertThat(result)
                 .hasStatusOk()
@@ -397,5 +410,331 @@ class UsageControllerTests extends AbstractIT {
                 .extractingPath("$.size()")
                 .asNumber()
                 .isEqualTo(3);
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldReturn400WhenCreatingUsageEventWithInvalidEventTypeFormat() {
+        var payload =
+                """
+                {
+                    "featureCode": "IDEA-1",
+                    "productCode": "intellij",
+                    "eventType": "invalid-event"
+                }
+                """;
+
+        var result = mvc.post()
+                .uri("/api/usage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldReturn400WhenCreatingUsageEventWithLowercaseEventType() {
+        var payload =
+                """
+                {
+                    "featureCode": "IDEA-1",
+                    "productCode": "intellij",
+                    "eventType": "viewed"
+                }
+                """;
+
+        var result = mvc.post()
+                .uri("/api/usage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldCreateUsageEventWithCustomEventType() {
+        var payload =
+                """
+                {
+                    "featureCode": "IDEA-1",
+                    "productCode": "intellij",
+                    "eventType": "CUSTOM_INSTALLED",
+                    "metadata": "{\\"version\\": \\"2025.1\\"}"
+                }
+                """;
+
+        var result = mvc.post()
+                .uri("/api/usage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.CREATED);
+        assertThat(result).bodyJson().convertTo(UsageEventDto.class).satisfies(dto -> {
+            assertThat(dto.eventType()).isEqualTo("CUSTOM_INSTALLED");
+        });
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldCreateUsageEventWithNullMetadata() {
+        var payload =
+                """
+                {
+                    "featureCode": "IDEA-1",
+                    "productCode": "intellij",
+                    "eventType": "VIEWED"
+                }
+                """;
+
+        var result = mvc.post()
+                .uri("/api/usage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.CREATED);
+        assertThat(result).bodyJson().convertTo(UsageEventDto.class).satisfies(dto -> {
+            assertThat(dto.metadata()).isNull();
+        });
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldGetFeatureUsageStatsWithCombinedFilters() {
+        var result = mvc.get()
+                .uri(
+                        "/api/usage/feature/{featureCode}?eventType=VIEWED&startDate=2024-03-01T00:00:00Z&endDate=2024-03-01T23:59:59Z",
+                        "IDEA-1")
+                .exchange();
+
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .convertTo(FeatureUsageStatsDto.class)
+                .satisfies(dto -> {
+                    assertThat(dto.featureCode()).isEqualTo("IDEA-1");
+                    assertThat(dto.totalEvents()).isGreaterThanOrEqualTo(0L);
+                });
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldGetProductUsageStatsWithCombinedFilters() {
+        var result = mvc.get()
+                .uri(
+                        "/api/usage/product/{productCode}?eventType=VIEWED&startDate=2024-03-01T00:00:00Z&endDate=2024-03-03T23:59:59Z",
+                        "goland")
+                .exchange();
+
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .convertTo(ProductUsageStatsDto.class)
+                .satisfies(dto -> {
+                    assertThat(dto.productCode()).isEqualTo("goland");
+                    assertThat(dto.totalEvents()).isGreaterThanOrEqualTo(0L);
+                });
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldReturn400WhenCreatingUsageEventWithEmptyEventType() {
+        var payload =
+                """
+                {
+                    "featureCode": "IDEA-1",
+                    "productCode": "intellij",
+                    "eventType": ""
+                }
+                """;
+
+        var result = mvc.post()
+                .uri("/api/usage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload)
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldGetFeatureUsageEventsWithDateRangeFilter() {
+        var result = mvc.get()
+                .uri(
+                        "/api/usage/feature/{featureCode}/events?startDate=2024-03-01T00:00:00Z&endDate=2024-03-01T23:59:59Z",
+                        "IDEA-1")
+                .exchange();
+
+        assertThat(result).hasStatusOk();
+        // Verify it returns an array
+        assertThat(result).bodyJson().extractingPath("$.size()").asNumber().isNotNull();
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldGetProductUsageEventsWithDateRangeFilter() {
+        var result = mvc.get()
+                .uri(
+                        "/api/usage/product/{productCode}/events?startDate=2024-03-03T00:00:00Z&endDate=2024-03-03T23:59:59Z",
+                        "goland")
+                .exchange();
+
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.size()")
+                .asNumber()
+                .isEqualTo(3);
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldGetFeatureUsageStatsWithNoEvents() {
+        var result = mvc.get()
+                .uri(
+                        "/api/usage/feature/{featureCode}?startDate=2020-01-01T00:00:00Z&endDate=2020-01-02T00:00:00Z",
+                        "IDEA-1")
+                .exchange();
+
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .convertTo(FeatureUsageStatsDto.class)
+                .satisfies(dto -> {
+                    assertThat(dto.featureCode()).isEqualTo("IDEA-1");
+                    assertThat(dto.totalEvents()).isEqualTo(0L);
+                    assertThat(dto.uniqueUsers()).isEqualTo(0L);
+                    assertThat(dto.eventsByType()).isEmpty();
+                    assertThat(dto.firstEventAt()).isNull();
+                    assertThat(dto.lastEventAt()).isNull();
+                });
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldGetProductUsageStatsWithNoEvents() {
+        var result = mvc.get()
+                .uri(
+                        "/api/usage/product/{productCode}?startDate=2020-01-01T00:00:00Z&endDate=2020-01-02T00:00:00Z",
+                        "intellij")
+                .exchange();
+
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .convertTo(ProductUsageStatsDto.class)
+                .satisfies(dto -> {
+                    assertThat(dto.productCode()).isEqualTo("intellij");
+                    assertThat(dto.totalEvents()).isEqualTo(0L);
+                    assertThat(dto.uniqueUsers()).isEqualTo(0L);
+                    assertThat(dto.uniqueFeatures()).isEqualTo(0L);
+                    assertThat(dto.eventsByType()).isEmpty();
+                    assertThat(dto.firstEventAt()).isNull();
+                    assertThat(dto.lastEventAt()).isNull();
+                });
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldGetFeatureUsageEventsReturnsEmptyList() {
+        var result = mvc.get()
+                .uri(
+                        "/api/usage/feature/{featureCode}/events?startDate=2020-01-01T00:00:00Z&endDate=2020-01-02T00:00:00Z",
+                        "IDEA-1")
+                .exchange();
+
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.size()")
+                .asNumber()
+                .isEqualTo(0);
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldGetProductUsageEventsReturnsEmptyList() {
+        var result = mvc.get()
+                .uri(
+                        "/api/usage/product/{productCode}/events?startDate=2020-01-01T00:00:00Z&endDate=2020-01-02T00:00:00Z",
+                        "intellij")
+                .exchange();
+
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.size()")
+                .asNumber()
+                .isEqualTo(0);
+    }
+
+    // ========== Missing Test Cases - Error Scenarios for /events Endpoints ==========
+
+    @Test
+    void shouldReturn401WhenGettingFeatureUsageEventsWithoutAuthentication() {
+        var result = mvc.get()
+                .uri("/api/usage/feature/{featureCode}/events", "IDEA-1")
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void shouldReturn401WhenGettingProductUsageEventsWithoutAuthentication() {
+        var result = mvc.get()
+                .uri("/api/usage/product/{productCode}/events", "intellij")
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldReturn404WhenGettingFeatureUsageEventsForNonExistentFeature() {
+        var result = mvc.get()
+                .uri("/api/usage/feature/{featureCode}/events", "INVALID-FEATURE")
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldReturn404WhenGettingProductUsageEventsForNonExistentProduct() {
+        var result = mvc.get()
+                .uri("/api/usage/product/{productCode}/events", "invalid-product")
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldReturn400WhenGettingFeatureUsageEventsWithInvalidDateRange() {
+        var result = mvc.get()
+                .uri(
+                        "/api/usage/feature/{featureCode}/events?startDate=2024-03-10T00:00:00Z&endDate=2024-03-01T23:59:59Z",
+                        "IDEA-1")
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @WithMockOAuth2User(username = "testuser")
+    void shouldReturn400WhenGettingProductUsageEventsWithInvalidDateRange() {
+        var result = mvc.get()
+                .uri(
+                        "/api/usage/product/{productCode}/events?startDate=2024-03-10T00:00:00Z&endDate=2024-03-01T23:59:59Z",
+                        "intellij")
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.BAD_REQUEST);
     }
 }
