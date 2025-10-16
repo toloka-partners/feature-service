@@ -20,10 +20,8 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldGetAllUsageEvents() {
-        // When
         var result = mvc.get().uri("/api/usage/events?page=0&size=20").exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -34,15 +32,12 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldGetUsageEventsByUserId() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/events?userId=user1@example.com&page=0&size=10")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$.content").isNotNull();
 
-        // Verify all results are for the requested user
         assertThat(result)
                 .bodyJson()
                 .extractingPath("$.content.size()")
@@ -52,65 +47,53 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldGetUsageEventsByFeatureCode() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/events?featureCode=IDEA-1&page=0&size=10")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$.content").isNotNull();
     }
 
     @Test
     void shouldGetUsageEventsByProductCode() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/events?productCode=intellij&page=0&size=10")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$.content").isNotNull();
     }
 
     @Test
     void shouldGetUsageEventsByActionType() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/events?actionType=FEATURE_VIEWED&page=0&size=10")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$.content").isNotNull();
     }
 
     @Test
     void shouldGetUsageEventsByDateRange() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/events?startDate=2025-10-02T00:00:00Z&endDate=2025-10-04T23:59:59Z&page=0&size=20")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$.content").isNotNull();
     }
 
     @Test
     void shouldGetUsageEventsWithMultipleFilters() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/events?userId=user1@example.com&actionType=FEATURE_VIEWED&productCode=intellij")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$.content").isNotNull();
     }
 
     @Test
     void shouldGetUsageStatistics() {
-        // When
         var result = mvc.get().uri("/api/usage/stats").exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -137,12 +120,10 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldGetUsageStatisticsForDateRange() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/stats?startDate=2025-10-02T00:00:00Z&endDate=2025-10-04T23:59:59Z")
                 .exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -153,39 +134,31 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldGetUsageEventsForSpecificUser() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/user/user1@example.com?page=0&size=10")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$.content").isNotNull();
     }
 
     @Test
     void shouldGetUsageEventsForSpecificFeature() {
-        // When
         var result = mvc.get().uri("/api/usage/feature/IDEA-1?page=0&size=10").exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$.content").isNotNull();
     }
 
     @Test
     void shouldGetUsageEventsForSpecificProduct() {
-        // When
         var result = mvc.get().uri("/api/usage/product/intellij?page=0&size=10").exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$.content").isNotNull();
     }
 
     @Test
     void shouldGetTopFeatures() {
-        // When
         var result = mvc.get().uri("/api/usage/top-features?limit=5").exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -196,21 +169,17 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldGetTopFeaturesWithDateRange() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/top-features?startDate=2025-10-02T00:00:00Z&endDate=2025-10-04T23:59:59Z&limit=10")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().isNotNull();
     }
 
     @Test
     void shouldGetTopUsers() {
-        // When
         var result = mvc.get().uri("/api/usage/top-users?limit=5").exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -221,18 +190,15 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldGetTopUsersWithDateRange() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/top-users?startDate=2025-10-02T00:00:00Z&endDate=2025-10-04T23:59:59Z&limit=10")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().isNotNull();
     }
 
     @Test
     void shouldHandlePaginationCorrectly() {
-        // Test first page
         var page1 = mvc.get().uri("/api/usage/events?page=0&size=5").exchange();
         assertThat(page1)
                 .hasStatusOk()
@@ -243,7 +209,6 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
         assertThat(page1).bodyJson().extractingPath("$.number").asNumber().isEqualTo(0);
 
-        // Test second page
         var page2 = mvc.get().uri("/api/usage/events?page=1&size=5").exchange();
         assertThat(page2)
                 .hasStatusOk()
@@ -255,12 +220,10 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldReturnEmptyResultsForNonExistentData() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/events?userId=nonexistent@example.com")
                 .exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -271,18 +234,15 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldValidateUsageDataIntegrity() {
-        // Verify data was loaded correctly
         long count = featureUsageRepository.count();
         assertThat(count).isGreaterThanOrEqualTo(20L);
 
-        // Verify we have multiple users
         long distinctUsers = featureUsageRepository.findAll().stream()
                 .map(FeatureUsage::getUserId)
                 .distinct()
                 .count();
         assertThat(distinctUsers).isGreaterThanOrEqualTo(4L);
 
-        // Verify we have multiple features
         long distinctFeatures = featureUsageRepository.findAll().stream()
                 .map(FeatureUsage::getFeatureCode)
                 .filter(code -> code != null)
@@ -290,7 +250,6 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
                 .count();
         assertThat(distinctFeatures).isGreaterThanOrEqualTo(3L);
 
-        // Verify we have multiple action types
         long distinctActionTypes = featureUsageRepository.findAll().stream()
                 .map(FeatureUsage::getActionType)
                 .distinct()
@@ -300,7 +259,6 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldCreateUsageEventViaPostEndpoint() {
-        // Given
         var requestBody =
                 """
                 {
@@ -314,17 +272,14 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
                 }
                 """;
 
-        // When
         var result = mvc.post()
                 .uri("/api/usage")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody)
                 .exchange();
 
-        // Then
         assertThat(result).hasStatus(201);
 
-        // Verify response body contains created event
         assertThat(result).bodyJson().extractingPath("$.featureCode").asString().isEqualTo("FEAT-001");
 
         assertThat(result).bodyJson().extractingPath("$.id").isNotNull();
@@ -333,7 +288,6 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldCreateUsageEventWithMinimalData() {
-        // Given
         var requestBody =
                 """
                 {
@@ -341,21 +295,18 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
                 }
                 """;
 
-        // When
         var result = mvc.post()
                 .uri("/api/usage")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody)
                 .exchange();
 
-        // Then
         assertThat(result).hasStatus(201);
         assertThat(result).bodyJson().extractingPath("$.actionType").asString().isEqualTo("FEATURE_CREATED");
     }
 
     @Test
     void shouldRejectPostUsageEventWithoutActionType() {
-        // Given
         var requestBody =
                 """
                 {
@@ -364,20 +315,17 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
                 }
                 """;
 
-        // When
         var result = mvc.post()
                 .uri("/api/usage")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody)
                 .exchange();
 
-        // Then - Should return 4xx client error for validation errors
         assertThat(result).hasStatus4xxClientError();
     }
 
     @Test
     void shouldRejectPostUsageEventWithInvalidActionType() {
-        // Given
         var requestBody =
                 """
                 {
@@ -386,44 +334,37 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
                 }
                 """;
 
-        // When
         var result = mvc.post()
                 .uri("/api/usage")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody)
                 .exchange();
 
-        // Then - Should return 4xx client error for invalid enum value
         assertThat(result).hasStatus4xxClientError();
     }
 
     @Test
     void shouldRejectPostUsageEventWithMalformedJson() {
-        // Given
         var requestBody =
                 """
                 {
                     "actionType": "FEATURE_VIEWED",
                     "featureCode": "FEAT-001"
-                """; // Missing closing brace
+                """;
 
-        // When
         var result = mvc.post()
                 .uri("/api/usage")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody)
                 .exchange();
 
-        // Then - Should return 4xx client error for malformed JSON
         assertThat(result).hasStatus4xxClientError();
     }
 
     @Test
     void shouldGetFeatureUsageEventsList() {
-        // When
         var result = mvc.get().uri("/api/usage/feature/IDEA-1/events").exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -434,37 +375,30 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldGetFeatureUsageEventsWithActionTypeFilter() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/feature/IDEA-1/events?actionType=FEATURE_VIEWED")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$").isNotNull();
     }
 
     @Test
     void shouldGetFeatureUsageEventsWithDateRangeFilter() {
-        // Given
         Instant startDate = Instant.now().minusSeconds(7200);
         Instant endDate = Instant.now();
 
-        // When
         var result = mvc.get()
                 .uri("/api/usage/feature/IDEA-1/events?startDate=" + startDate.toString() + "&endDate="
                         + endDate.toString())
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk();
     }
 
     @Test
     void shouldGetProductUsageEventsList() {
-        // When
         var result = mvc.get().uri("/api/usage/product/intellij/events").exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -475,39 +409,32 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldGetProductUsageEventsWithActionTypeFilter() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/product/intellij/events?actionType=FEATURE_VIEWED")
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$").isNotNull();
     }
 
     @Test
     void shouldGetProductUsageEventsWithDateRangeFilter() {
-        // Given
         Instant startDate = Instant.now().minusSeconds(7200);
         Instant endDate = Instant.now();
 
-        // When
         var result = mvc.get()
                 .uri("/api/usage/product/intellij/events?startDate=" + startDate.toString() + "&endDate="
                         + endDate.toString())
                 .exchange();
 
-        // Then
         assertThat(result).hasStatusOk();
     }
 
     @Test
     void shouldGetFeatureStatsWithActionTypeFilter() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/feature/IDEA-1/stats?actionType=FEATURE_VIEWED")
                 .exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -518,12 +445,10 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldGetProductStatsWithActionTypeFilter() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/product/intellij/stats?actionType=FEATURE_VIEWED")
                 .exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -534,32 +459,26 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldHandleInvalidDateFormatInFeatureStats() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/feature/FEAT-001/stats?startDate=invalid-date")
                 .exchange();
 
-        // Then - Should return 4xx client error for invalid date format
         assertThat(result).hasStatus4xxClientError();
     }
 
     @Test
     void shouldHandleInvalidDateFormatInProductStats() {
-        // When
         var result = mvc.get()
                 .uri("/api/usage/product/PROD-001/stats?endDate=invalid-date")
                 .exchange();
 
-        // Then - Should return 4xx client error for invalid date format
         assertThat(result).hasStatus4xxClientError();
     }
 
     @Test
     void shouldReturnEmptyStatsForNonExistentFeature() {
-        // When
         var result = mvc.get().uri("/api/usage/feature/NON-EXISTENT/stats").exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -570,10 +489,8 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldReturnEmptyStatsForNonExistentProduct() {
-        // When
         var result = mvc.get().uri("/api/usage/product/NON-EXISTENT/stats").exchange();
 
-        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()

@@ -199,10 +199,10 @@ public class FeatureUsageService {
     @Transactional(readOnly = true)
     public com.sivalabs.ft.features.domain.dtos.FeatureStatsDto getFeatureStats(
             String featureCode, ActionType actionType, Instant startDate, Instant endDate) {
-        // Total usage count for the feature (filtered by actionType if provided)
+
         long totalCount;
         if (actionType != null) {
-            // Count with actionType filter
+
             Page<FeatureUsage> filteredEvents = featureUsageRepository.findByFilters(
                     null, featureCode, null, actionType, startDate, endDate, Pageable.unpaged());
             totalCount = filteredEvents.getTotalElements();
@@ -212,10 +212,8 @@ public class FeatureUsageService {
                     : featureUsageRepository.countByFeatureCode(featureCode);
         }
 
-        // Unique users for the feature
         long uniqueUsers = featureUsageRepository.countDistinctUsersByFeatureCode(featureCode, startDate, endDate);
 
-        // Usage by action type for the feature
         List<Object[]> actionTypeData =
                 featureUsageRepository.findActionTypeStatsByFeatureCode(featureCode, startDate, endDate);
         Map<ActionType, Long> usageByActionType = actionTypeData.stream()
@@ -225,14 +223,12 @@ public class FeatureUsageService {
                         (a, b) -> a,
                         LinkedHashMap::new));
 
-        // Top users for the feature
         List<Object[]> topUsersData = featureUsageRepository.findTopUsersByFeatureCode(featureCode, startDate, endDate);
         Map<String, Long> topUsers = topUsersData.stream()
                 .limit(10)
                 .collect(Collectors.toMap(
                         row -> (String) row[0], row -> ((Number) row[1]).longValue(), (a, b) -> a, LinkedHashMap::new));
 
-        // Usage by product for the feature
         List<Object[]> productData =
                 featureUsageRepository.findUsageByProductForFeature(featureCode, startDate, endDate);
         Map<String, Long> usageByProduct = productData.stream()
@@ -247,10 +243,8 @@ public class FeatureUsageService {
     @Transactional(readOnly = true)
     public com.sivalabs.ft.features.domain.dtos.ProductStatsDto getProductStats(
             String productCode, ActionType actionType, Instant startDate, Instant endDate) {
-        // Total usage count for the product (filtered by actionType if provided)
         long totalCount;
         if (actionType != null) {
-            // Count with actionType filter
             Page<FeatureUsage> filteredEvents = featureUsageRepository.findByFilters(
                     null, null, productCode, actionType, startDate, endDate, Pageable.unpaged());
             totalCount = filteredEvents.getTotalElements();
@@ -260,14 +254,11 @@ public class FeatureUsageService {
                     : featureUsageRepository.countByProductCode(productCode);
         }
 
-        // Unique users for the product
         long uniqueUsers = featureUsageRepository.countDistinctUsersByProductCode(productCode, startDate, endDate);
 
-        // Unique features for the product
         long uniqueFeatures =
                 featureUsageRepository.countDistinctFeaturesByProductCode(productCode, startDate, endDate);
 
-        // Usage by action type for the product
         List<Object[]> actionTypeData =
                 featureUsageRepository.findActionTypeStatsByProductCode(productCode, startDate, endDate);
         Map<ActionType, Long> usageByActionType = actionTypeData.stream()
@@ -277,7 +268,6 @@ public class FeatureUsageService {
                         (a, b) -> a,
                         LinkedHashMap::new));
 
-        // Top features for the product
         List<Object[]> topFeaturesData =
                 featureUsageRepository.findTopFeaturesByProductCode(productCode, startDate, endDate);
         Map<String, Long> topFeatures = topFeaturesData.stream()
@@ -285,7 +275,6 @@ public class FeatureUsageService {
                 .collect(Collectors.toMap(
                         row -> (String) row[0], row -> ((Number) row[1]).longValue(), (a, b) -> a, LinkedHashMap::new));
 
-        // Top users for the product
         List<Object[]> topUsersData = featureUsageRepository.findTopUsersByProductCode(productCode, startDate, endDate);
         Map<String, Long> topUsers = topUsersData.stream()
                 .limit(10)
