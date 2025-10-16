@@ -33,7 +33,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public boolean existsByCode(String code) {
-        return productRepository.existsByCode(code);
+        return productRepository.findByCode(code).isPresent();
     }
 
     @Transactional
