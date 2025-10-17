@@ -98,6 +98,9 @@ class FeatureUsageController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.badRequest().build();
+        }
         Pageable pageable = PageRequest.of(page, size);
         Page<FeatureUsageDto> usageEvents = featureUsageService.findUsageEvents(
                 userId, featureCode, productCode, actionType, startDate, endDate, pageable);
@@ -120,6 +123,9 @@ class FeatureUsageController {
     ResponseEntity<UsageStatsDto> getUsageStats(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.badRequest().build();
+        }
         UsageStatsDto stats = featureUsageService.getUsageStats(startDate, endDate);
         return ResponseEntity.ok(stats);
     }
@@ -198,6 +204,9 @@ class FeatureUsageController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
             @RequestParam(defaultValue = "10") int limit) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.badRequest().build();
+        }
         Map<String, Long> topFeatures = featureUsageService.getTopFeatures(startDate, endDate, limit);
         return ResponseEntity.ok(topFeatures);
     }
@@ -216,6 +225,9 @@ class FeatureUsageController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
             @RequestParam(defaultValue = "10") int limit) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.badRequest().build();
+        }
         Map<String, Long> topUsers = featureUsageService.getTopUsers(startDate, endDate, limit);
         return ResponseEntity.ok(topUsers);
     }
@@ -239,6 +251,9 @@ class FeatureUsageController {
             @RequestParam(required = false) ActionType actionType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.badRequest().build();
+        }
         FeatureStatsDto stats = featureUsageService.getFeatureStats(featureCode, actionType, startDate, endDate);
         return ResponseEntity.ok(stats);
     }
@@ -262,6 +277,9 @@ class FeatureUsageController {
             @RequestParam(required = false) ActionType actionType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.badRequest().build();
+        }
         ProductStatsDto stats = featureUsageService.getProductStats(productCode, actionType, startDate, endDate);
         return ResponseEntity.ok(stats);
     }
@@ -282,6 +300,9 @@ class FeatureUsageController {
             @RequestParam(required = false) ActionType actionType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.badRequest().build();
+        }
         List<FeatureUsageDto> events =
                 featureUsageService.getFeatureEvents(featureCode, actionType, startDate, endDate);
         return ResponseEntity.ok(events);
@@ -303,6 +324,9 @@ class FeatureUsageController {
             @RequestParam(required = false) ActionType actionType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.badRequest().build();
+        }
         List<FeatureUsageDto> events =
                 featureUsageService.getProductEvents(productCode, actionType, startDate, endDate);
         return ResponseEntity.ok(events);
