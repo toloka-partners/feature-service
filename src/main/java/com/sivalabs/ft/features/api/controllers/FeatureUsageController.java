@@ -118,7 +118,11 @@ class FeatureUsageController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        schema = @Schema(implementation = UsageStatsDto.class)))
+                                        schema = @Schema(implementation = UsageStatsDto.class))),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = "Invalid request parameters (e.g., invalid date format)"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized")
             })
     ResponseEntity<UsageStatsDto> getUsageStats(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
