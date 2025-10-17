@@ -9,6 +9,7 @@ import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -93,6 +94,23 @@ class GlobalExceptionHandler {
         });
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(BAD_REQUEST, errorMessage.toString());
         problemDetail.setTitle("Validation Error");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ProblemDetail handle(HttpMessageNotReadableException e) {
+        log.error("Invalid request body", e);
+        String message = "Invalid request body";
+        if (e.getMessage() != null) {
+            if (e.getMessage().contains("not one of the values accepted for Enum")) {
+                message = "Invalid enum value provided";
+            } else if (e.getMessage().contains("JSON parse error")) {
+                message = "Malformed JSON in request body";
+            }
+        }
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(BAD_REQUEST, message);
+        problemDetail.setTitle("Invalid Request");
         problemDetail.setProperty("timestamp", Instant.now());
         return problemDetail;
     }

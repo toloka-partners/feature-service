@@ -198,10 +198,10 @@ class FeatureUsageServiceTest {
 
         // Then
         assertThat(stats).isNotNull();
-        assertThat(stats.totalEvents()).isEqualTo(100L);
-        assertThat(stats.uniqueUsers()).isEqualTo(2L);
-        assertThat(stats.uniqueFeatures()).isEqualTo(2L);
-        assertThat(stats.eventsByActionType()).hasSize(2);
+        assertThat(stats.totalUsageCount()).isEqualTo(100L);
+        assertThat(stats.uniqueUserCount()).isEqualTo(2L);
+        assertThat(stats.uniqueFeatureCount()).isEqualTo(2L);
+        assertThat(stats.usageByActionType()).hasSize(2);
         assertThat(stats.topFeatures()).hasSize(2);
         assertThat(stats.topUsers()).hasSize(2);
     }

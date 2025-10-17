@@ -130,12 +130,12 @@ public class FeatureUsageService {
 
     @Transactional(readOnly = true)
     public UsageStatsDto getUsageStats(Instant startDate, Instant endDate) {
-        long totalEvents = startDate != null && endDate != null
+        long totalUsageCount = startDate != null && endDate != null
                 ? featureUsageRepository.countByTimestampBetween(startDate, endDate)
                 : featureUsageRepository.count();
 
         List<Object[]> actionTypeStats = featureUsageRepository.findActionTypeStats(startDate, endDate);
-        Map<ActionType, Long> eventsByActionType = actionTypeStats.stream()
+        Map<ActionType, Long> usageByActionType = actionTypeStats.stream()
                 .collect(Collectors.toMap(
                         row -> (ActionType) row[0],
                         row -> ((Number) row[1]).longValue(),
@@ -160,16 +160,16 @@ public class FeatureUsageService {
                 .collect(Collectors.toMap(
                         row -> (String) row[0], row -> ((Number) row[1]).longValue(), (a, b) -> a, LinkedHashMap::new));
 
-        long uniqueUsers = featureUsageRepository.countDistinctUsers(startDate, endDate);
-        long uniqueFeatures = featureUsageRepository.countDistinctFeatures(startDate, endDate);
-        long uniqueProducts = featureUsageRepository.countDistinctProducts(startDate, endDate);
+        long uniqueUserCount = featureUsageRepository.countDistinctUsers(startDate, endDate);
+        long uniqueFeatureCount = featureUsageRepository.countDistinctFeatures(startDate, endDate);
+        long uniqueProductCount = featureUsageRepository.countDistinctProducts(startDate, endDate);
 
         return new UsageStatsDto(
-                totalEvents,
-                uniqueUsers,
-                uniqueFeatures,
-                uniqueProducts,
-                eventsByActionType,
+                totalUsageCount,
+                uniqueUserCount,
+                uniqueFeatureCount,
+                uniqueProductCount,
+                usageByActionType,
                 topFeatures,
                 topProducts,
                 topUsers);
