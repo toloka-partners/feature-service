@@ -10,3 +10,4 @@ public record FeatureStatsDto(
         Map<ActionType, Long> usageByActionType,
         Map<String, Long> topUsers,
         Map<String, Long> usageByProduct) {}
+

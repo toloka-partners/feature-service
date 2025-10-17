@@ -34,7 +34,14 @@ public class MockOAuth2UserContextFactory implements WithSecurityContextFactory<
         }
 
         Map<String, Object> claims = Map.of(
-                "preferred_username", username, "userId", withUser.id(), "realm_access", Map.of("roles", roleNames));
+                "sub",
+                username,
+                "preferred_username",
+                username,
+                "userId",
+                withUser.id(),
+                "realm_access",
+                Map.of("roles", roleNames));
         Map<String, Object> headers = Map.of("header", "mock");
         Jwt jwt = new Jwt("mock-jwt-token", Instant.now(), Instant.now().plusSeconds(300), headers, claims);
         Authentication authentication = new JwtAuthenticationToken(jwt, authorities);

@@ -11,3 +11,4 @@ public record ProductStatsDto(
         Map<ActionType, Long> usageByActionType,
         Map<String, Long> topFeatures,
         Map<String, Long> topUsers) {}
+

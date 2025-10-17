@@ -15,9 +15,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -132,12 +130,12 @@ public class FeatureUsageService {
 
     @Transactional(readOnly = true)
     public UsageStatsDto getUsageStats(Instant startDate, Instant endDate) {
-        long totalEvents = startDate != null && endDate != null
+        long totalUsageCount = startDate != null && endDate != null
                 ? featureUsageRepository.countByTimestampBetween(startDate, endDate)
                 : featureUsageRepository.count();
 
         List<Object[]> actionTypeStats = featureUsageRepository.findActionTypeStats(startDate, endDate);
-        Map<ActionType, Long> eventsByActionType = actionTypeStats.stream()
+        Map<ActionType, Long> usageByActionType = actionTypeStats.stream()
                 .collect(Collectors.toMap(
                         row -> (ActionType) row[0],
                         row -> ((Number) row[1]).longValue(),
@@ -162,16 +160,16 @@ public class FeatureUsageService {
                 .collect(Collectors.toMap(
                         row -> (String) row[0], row -> ((Number) row[1]).longValue(), (a, b) -> a, LinkedHashMap::new));
 
-        long uniqueUsers = featureUsageRepository.countDistinctUsers(startDate, endDate);
-        long uniqueFeatures = featureUsageRepository.countDistinctFeatures(startDate, endDate);
-        long uniqueProducts = featureUsageRepository.countDistinctProducts(startDate, endDate);
+        long uniqueUserCount = featureUsageRepository.countDistinctUsers(startDate, endDate);
+        long uniqueFeatureCount = featureUsageRepository.countDistinctFeatures(startDate, endDate);
+        long uniqueProductCount = featureUsageRepository.countDistinctProducts(startDate, endDate);
 
         return new UsageStatsDto(
-                totalEvents,
-                uniqueUsers,
-                uniqueFeatures,
-                uniqueProducts,
-                eventsByActionType,
+                totalUsageCount,
+                uniqueUserCount,
+                uniqueFeatureCount,
+                uniqueProductCount,
+                usageByActionType,
                 topFeatures,
                 topProducts,
                 topUsers);
@@ -204,15 +202,46 @@ public class FeatureUsageService {
             Map<String, Object> context,
             String ipAddress,
             String userAgent) {
-        logUsage(userId, featureCode, productCode, actionType, context, ipAddress, userAgent);
-
-        // Find the most recently created usage event for this user
-        Page<FeatureUsage> recentUsage =
-                featureUsageRepository.findByUserId(userId, PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "id")));
-        if (recentUsage.hasContent()) {
-            return featureUsageMapper.toDto(recentUsage.getContent().get(0));
+        if (!applicationProperties.usageTracking().enabled()) {
+            return null;
         }
-        return null;
+
+        try {
+            String contextJson = null;
+            if (context != null && !context.isEmpty()) {
+                try {
+                    contextJson = objectMapper.writeValueAsString(context);
+                } catch (JsonProcessingException e) {
+                    log.warn("Failed to serialize context data", e);
+                }
+            }
+
+            var featureUsage = new FeatureUsage();
+            featureUsage.setUserId(userId);
+            featureUsage.setFeatureCode(featureCode);
+            featureUsage.setProductCode(productCode);
+            featureUsage.setActionType(actionType);
+            featureUsage.setTimestamp(Instant.now());
+            featureUsage.setContext(contextJson);
+            if (applicationProperties.usageTracking().captureIp()) {
+                featureUsage.setIpAddress(ipAddress);
+            }
+            if (applicationProperties.usageTracking().captureUserAgent()) {
+                featureUsage.setUserAgent(userAgent);
+            }
+
+            FeatureUsage savedUsage = featureUsageRepository.save(featureUsage);
+            log.debug(
+                    "Created usage event: user={}, feature={}, product={}, action={}",
+                    userId,
+                    featureCode,
+                    productCode,
+                    actionType);
+            return featureUsageMapper.toDto(savedUsage);
+        } catch (Exception e) {
+            log.error("Failed to create usage event", e);
+            return null;
+        }
     }
 
     @Transactional(readOnly = true)
