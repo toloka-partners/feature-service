@@ -56,6 +56,18 @@ public interface FeatureUsageRepository extends JpaRepository<FeatureUsage, Long
 
     @Query(
             """
+            SELECT fu.productCode, COUNT(fu) as count
+            FROM FeatureUsage fu
+            WHERE fu.productCode IS NOT NULL
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            GROUP BY fu.productCode
+            ORDER BY count DESC
+            """)
+    List<Object[]> findTopProducts(@Param("startDate") Instant startDate, @Param("endDate") Instant endDate);
+
+    @Query(
+            """
             SELECT fu.userId, COUNT(fu) as count
             FROM FeatureUsage fu
             WHERE (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
@@ -104,4 +116,224 @@ public interface FeatureUsageRepository extends JpaRepository<FeatureUsage, Long
             AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
             """)
     long countDistinctFeatures(@Param("startDate") Instant startDate, @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT COUNT(DISTINCT fu.productCode)
+            FROM FeatureUsage fu
+            WHERE fu.productCode IS NOT NULL
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            """)
+    long countDistinctProducts(@Param("startDate") Instant startDate, @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT fu.actionType, COUNT(fu) as count
+            FROM FeatureUsage fu
+            WHERE fu.featureCode = :featureCode
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            GROUP BY fu.actionType
+            ORDER BY count DESC
+            """)
+    List<Object[]> findActionTypeStatsByFeature(
+            @Param("featureCode") String featureCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT fu.userId, COUNT(fu) as count
+            FROM FeatureUsage fu
+            WHERE fu.featureCode = :featureCode
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            GROUP BY fu.userId
+            ORDER BY count DESC
+            """)
+    List<Object[]> findTopUsersByFeature(
+            @Param("featureCode") String featureCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT fu.productCode, COUNT(fu) as count
+            FROM FeatureUsage fu
+            WHERE fu.featureCode = :featureCode
+            AND fu.productCode IS NOT NULL
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            GROUP BY fu.productCode
+            ORDER BY count DESC
+            """)
+    List<Object[]> findUsageByProductForFeature(
+            @Param("featureCode") String featureCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT COUNT(DISTINCT fu.userId)
+            FROM FeatureUsage fu
+            WHERE fu.featureCode = :featureCode
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            """)
+    long countDistinctUsersByFeature(
+            @Param("featureCode") String featureCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT COUNT(fu)
+            FROM FeatureUsage fu
+            WHERE fu.featureCode = :featureCode
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            """)
+    long countByFeatureCodeWithFilters(
+            @Param("featureCode") String featureCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT fu.actionType, COUNT(fu) as count
+            FROM FeatureUsage fu
+            WHERE fu.productCode = :productCode
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            GROUP BY fu.actionType
+            ORDER BY count DESC
+            """)
+    List<Object[]> findActionTypeStatsByProduct(
+            @Param("productCode") String productCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT fu.featureCode, COUNT(fu) as count
+            FROM FeatureUsage fu
+            WHERE fu.productCode = :productCode
+            AND fu.featureCode IS NOT NULL
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            GROUP BY fu.featureCode
+            ORDER BY count DESC
+            """)
+    List<Object[]> findTopFeaturesByProduct(
+            @Param("productCode") String productCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT fu.userId, COUNT(fu) as count
+            FROM FeatureUsage fu
+            WHERE fu.productCode = :productCode
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            GROUP BY fu.userId
+            ORDER BY count DESC
+            """)
+    List<Object[]> findTopUsersByProduct(
+            @Param("productCode") String productCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT COUNT(DISTINCT fu.userId)
+            FROM FeatureUsage fu
+            WHERE fu.productCode = :productCode
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            """)
+    long countDistinctUsersByProduct(
+            @Param("productCode") String productCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT COUNT(DISTINCT fu.featureCode)
+            FROM FeatureUsage fu
+            WHERE fu.productCode = :productCode
+            AND fu.featureCode IS NOT NULL
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            """)
+    long countDistinctFeaturesByProduct(
+            @Param("productCode") String productCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT COUNT(fu)
+            FROM FeatureUsage fu
+            WHERE fu.productCode = :productCode
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            """)
+    long countByProductCodeWithFilters(
+            @Param("productCode") String productCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT fu FROM FeatureUsage fu
+            WHERE fu.featureCode = :featureCode
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            ORDER BY fu.timestamp DESC
+            """)
+    List<FeatureUsage> findByFeatureCodeWithFilters(
+            @Param("featureCode") String featureCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT fu FROM FeatureUsage fu
+            WHERE fu.productCode = :productCode
+            AND (CAST(:actionType AS string) IS NULL OR fu.actionType = :actionType)
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            ORDER BY fu.timestamp DESC
+            """)
+    List<FeatureUsage> findByProductCodeWithFilters(
+            @Param("productCode") String productCode,
+            @Param("actionType") ActionType actionType,
+            @Param("startDate") Instant startDate,
+            @Param("endDate") Instant endDate);
 }

@@ -7,6 +7,8 @@ public record UsageStatsDto(
         long totalEvents,
         long uniqueUsers,
         long uniqueFeatures,
+        long uniqueProducts,
         Map<ActionType, Long> eventsByActionType,
         Map<String, Long> topFeatures,
+        Map<String, Long> topProducts,
         Map<String, Long> topUsers) {}
