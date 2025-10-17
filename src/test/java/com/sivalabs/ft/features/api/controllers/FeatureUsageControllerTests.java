@@ -534,24 +534,30 @@ class FeatureUsageControllerTest extends AbstractIT {
     }
 
     @Test
-    void shouldGetUsageEventsWithPagination() {
+    void shouldGetAllUsageEventsAsList() {
         for (int i = 0; i < 25; i++) {
             createFeatureUsage("user" + i, "FEAT-" + i, "PROD-001", ActionType.FEATURE_VIEWED);
         }
 
-        var result = mvc.get().uri("/api/usage/events?page=0&size=10").exchange();
+        var result = mvc.get().uri("/api/usage/events").exchange();
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
-                .extractingPath("$.content.size()")
+                .extractingPath("$.size()")
                 .asNumber()
-                .isEqualTo(10);
+                .satisfies(size -> assertThat(size.intValue()).isGreaterThanOrEqualTo(25));
+    }
 
-        assertThat(result)
-                .bodyJson()
-                .extractingPath("$.totalElements")
-                .asNumber()
-                .satisfies(total -> assertThat(total.intValue()).isGreaterThanOrEqualTo(25));
+    @Test
+    void shouldHandleInvalidDateRangeInAllUsageEvents() {
+        Instant startDate = Instant.now();
+        Instant endDate = Instant.now().minusSeconds(3600);
+
+        var result = mvc.get()
+                .uri("/api/usage/events?startDate=" + startDate.toString() + "&endDate=" + endDate.toString())
+                .exchange();
+
+        assertThat(result).hasStatus4xxClientError();
     }
 
     private FeatureUsage createFeatureUsage(

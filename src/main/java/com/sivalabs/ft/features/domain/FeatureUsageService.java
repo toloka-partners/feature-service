@@ -116,6 +116,19 @@ public class FeatureUsageService {
     }
 
     @Transactional(readOnly = true)
+    public List<FeatureUsageDto> findAllUsageEvents(
+            String userId,
+            String featureCode,
+            String productCode,
+            ActionType actionType,
+            Instant startDate,
+            Instant endDate) {
+        Page<FeatureUsage> usagePage = featureUsageRepository.findByFilters(
+                userId, featureCode, productCode, actionType, startDate, endDate, Pageable.unpaged());
+        return usagePage.getContent().stream().map(featureUsageMapper::toDto).toList();
+    }
+
+    @Transactional(readOnly = true)
     public Page<FeatureUsageDto> findByUserId(String userId, Pageable pageable) {
         return featureUsageRepository.findByUserId(userId, pageable).map(featureUsageMapper::toDto);
     }

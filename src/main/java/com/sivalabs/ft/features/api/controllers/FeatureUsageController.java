@@ -48,26 +48,27 @@ class FeatureUsageController {
     @GetMapping("/events")
     @Operation(
             summary = "Get usage events",
-            description = "Retrieve paginated usage events with optional filters",
+            description = "Retrieve all usage events with optional filters",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
                         description = "Successful response",
-                        content =
-                                @Content(mediaType = "application/json", schema = @Schema(implementation = Page.class)))
+                        content = @Content(mediaType = "application/json")),
+                @ApiResponse(responseCode = "400", description = "Invalid date format or date range"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized")
             })
-    ResponseEntity<Page<FeatureUsageDto>> getUsageEvents(
+    ResponseEntity<List<FeatureUsageDto>> getUsageEvents(
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) String featureCode,
             @RequestParam(required = false) String productCode,
             @RequestParam(required = false) ActionType actionType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        Page<FeatureUsageDto> usageEvents = featureUsageService.findUsageEvents(
-                userId, featureCode, productCode, actionType, startDate, endDate, pageable);
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<FeatureUsageDto> usageEvents = featureUsageService.findAllUsageEvents(
+                userId, featureCode, productCode, actionType, startDate, endDate);
         return ResponseEntity.ok(usageEvents);
     }
 
