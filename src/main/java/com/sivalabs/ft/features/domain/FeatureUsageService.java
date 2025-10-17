@@ -1,0 +1,180 @@
+package com.sivalabs.ft.features.domain;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sivalabs.ft.features.domain.dtos.FeatureUsageDto;
+import com.sivalabs.ft.features.domain.dtos.UsageStatsDto;
+import com.sivalabs.ft.features.domain.entities.FeatureUsage;
+import com.sivalabs.ft.features.domain.mappers.FeatureUsageMapper;
+import com.sivalabs.ft.features.domain.models.ActionType;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class FeatureUsageService {
+    private static final Logger log = LoggerFactory.getLogger(FeatureUsageService.class);
+
+    private final FeatureUsageRepository featureUsageRepository;
+    private final FeatureUsageMapper featureUsageMapper;
+    private final ObjectMapper objectMapper;
+    private final com.sivalabs.ft.features.ApplicationProperties applicationProperties;
+
+    public FeatureUsageService(
+            FeatureUsageRepository featureUsageRepository,
+            FeatureUsageMapper featureUsageMapper,
+            ObjectMapper objectMapper,
+            com.sivalabs.ft.features.ApplicationProperties applicationProperties) {
+        this.featureUsageRepository = featureUsageRepository;
+        this.featureUsageMapper = featureUsageMapper;
+        this.objectMapper = objectMapper;
+        this.applicationProperties = applicationProperties;
+    }
+
+    @Transactional
+    public void logUsage(
+            String userId,
+            String featureCode,
+            String productCode,
+            ActionType actionType,
+            Map<String, Object> contextData,
+            String ipAddress,
+            String userAgent) {
+        if (!applicationProperties.usageTracking().enabled()) {
+            return;
+        }
+        try {
+            String contextJson = null;
+            if (contextData != null && !contextData.isEmpty()) {
+                try {
+                    contextJson = objectMapper.writeValueAsString(contextData);
+                } catch (JsonProcessingException e) {
+                    log.warn("Failed to serialize context data", e);
+                }
+            }
+
+            var featureUsage = new FeatureUsage();
+            featureUsage.setUserId(userId);
+            featureUsage.setFeatureCode(featureCode);
+            featureUsage.setProductCode(productCode);
+            featureUsage.setActionType(actionType);
+            featureUsage.setTimestamp(Instant.now());
+            featureUsage.setContext(contextJson);
+            if (applicationProperties.usageTracking().captureIp()) {
+                featureUsage.setIpAddress(ipAddress);
+            }
+            if (applicationProperties.usageTracking().captureUserAgent()) {
+                featureUsage.setUserAgent(userAgent);
+            }
+
+            featureUsageRepository.save(featureUsage);
+            log.debug(
+                    "Logged usage: user={}, feature={}, product={}, action={}",
+                    userId,
+                    featureCode,
+                    productCode,
+                    actionType);
+        } catch (Exception e) {
+            log.error("Failed to log usage event", e);
+            // Don't throw exception to avoid breaking the main flow
+        }
+    }
+
+    @Transactional
+    public void logUsage(String userId, String featureCode, String productCode, ActionType actionType) {
+        logUsage(userId, featureCode, productCode, actionType, null, null, null);
+    }
+
+    @Transactional
+    public void logUsage(
+            String userId, String featureCode, String productCode, ActionType actionType, Map<String, Object> context) {
+        logUsage(userId, featureCode, productCode, actionType, context, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<FeatureUsageDto> findUsageEvents(
+            String userId,
+            String featureCode,
+            String productCode,
+            ActionType actionType,
+            Instant startDate,
+            Instant endDate,
+            Pageable pageable) {
+        Page<FeatureUsage> usagePage = featureUsageRepository.findByFilters(
+                userId, featureCode, productCode, actionType, startDate, endDate, pageable);
+        return usagePage.map(featureUsageMapper::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<FeatureUsageDto> findByUserId(String userId, Pageable pageable) {
+        return featureUsageRepository.findByUserId(userId, pageable).map(featureUsageMapper::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<FeatureUsageDto> findByFeatureCode(String featureCode, Pageable pageable) {
+        return featureUsageRepository.findByFeatureCode(featureCode, pageable).map(featureUsageMapper::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<FeatureUsageDto> findByProductCode(String productCode, Pageable pageable) {
+        return featureUsageRepository.findByProductCode(productCode, pageable).map(featureUsageMapper::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public UsageStatsDto getUsageStats(Instant startDate, Instant endDate) {
+        long totalEvents = startDate != null && endDate != null
+                ? featureUsageRepository.countByTimestampBetween(startDate, endDate)
+                : featureUsageRepository.count();
+
+        List<Object[]> actionTypeStats = featureUsageRepository.findActionTypeStats(startDate, endDate);
+        Map<ActionType, Long> eventsByActionType = actionTypeStats.stream()
+                .collect(Collectors.toMap(
+                        row -> (ActionType) row[0],
+                        row -> ((Number) row[1]).longValue(),
+                        (a, b) -> a,
+                        LinkedHashMap::new));
+
+        List<Object[]> topFeaturesData = featureUsageRepository.findTopFeatures(startDate, endDate);
+        Map<String, Long> topFeatures = topFeaturesData.stream()
+                .limit(10)
+                .collect(Collectors.toMap(
+                        row -> (String) row[0], row -> ((Number) row[1]).longValue(), (a, b) -> a, LinkedHashMap::new));
+
+        List<Object[]> topUsersData = featureUsageRepository.findTopUsers(startDate, endDate);
+        Map<String, Long> topUsers = topUsersData.stream()
+                .limit(10)
+                .collect(Collectors.toMap(
+                        row -> (String) row[0], row -> ((Number) row[1]).longValue(), (a, b) -> a, LinkedHashMap::new));
+
+        long uniqueUsers = featureUsageRepository.countDistinctUsers(startDate, endDate);
+        long uniqueFeatures = featureUsageRepository.countDistinctFeatures(startDate, endDate);
+
+        return new UsageStatsDto(totalEvents, uniqueUsers, uniqueFeatures, eventsByActionType, topFeatures, topUsers);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Long> getTopFeatures(Instant startDate, Instant endDate, int limit) {
+        List<Object[]> topFeaturesData = featureUsageRepository.findTopFeatures(startDate, endDate);
+        return topFeaturesData.stream()
+                .limit(limit)
+                .collect(Collectors.toMap(
+                        row -> (String) row[0], row -> ((Number) row[1]).longValue(), (a, b) -> a, LinkedHashMap::new));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Long> getTopUsers(Instant startDate, Instant endDate, int limit) {
+        List<Object[]> topUsersData = featureUsageRepository.findTopUsers(startDate, endDate);
+        return topUsersData.stream()
+                .limit(limit)
+                .collect(Collectors.toMap(
+                        row -> (String) row[0], row -> ((Number) row[1]).longValue(), (a, b) -> a, LinkedHashMap::new));
+    }
+}
