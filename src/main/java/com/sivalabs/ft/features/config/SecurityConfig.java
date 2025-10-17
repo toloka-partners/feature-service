@@ -26,10 +26,6 @@ class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/v3/api-docs.*")
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/usage")
-                        .permitAll()
-                        .requestMatchers(HttpMethod.GET, "/usage/**")
-                        .authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/products/**")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/releases/**")
