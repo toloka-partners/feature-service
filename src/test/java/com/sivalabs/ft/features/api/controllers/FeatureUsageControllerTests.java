@@ -488,6 +488,94 @@ class FeatureUsageControllerTest extends AbstractIT {
         assertThat(result).hasStatus4xxClientError();
     }
 
+    @Test
+    void shouldGetUserUsage() {
+        createFeatureUsage("user1", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
+        createFeatureUsage("user1", "FEAT-002", "PROD-001", ActionType.FEATURE_CREATED);
+        createFeatureUsage("user2", "FEAT-003", "PROD-002", ActionType.FEATURE_VIEWED);
+
+        var result = mvc.get().uri("/api/usage/user/user1").exchange();
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.content.size()")
+                .asNumber()
+                .satisfies(size -> assertThat(size.intValue()).isGreaterThanOrEqualTo(2));
+    }
+
+    @Test
+    void shouldGetFeatureUsage() {
+        createFeatureUsage("user1", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
+        createFeatureUsage("user2", "FEAT-001", "PROD-001", ActionType.FEATURE_UPDATED);
+        createFeatureUsage("user1", "FEAT-002", "PROD-001", ActionType.FEATURE_VIEWED);
+
+        var result = mvc.get().uri("/api/usage/feature/FEAT-001").exchange();
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.content.size()")
+                .asNumber()
+                .satisfies(size -> assertThat(size.intValue()).isGreaterThanOrEqualTo(2));
+    }
+
+    @Test
+    void shouldGetProductUsage() {
+        createFeatureUsage("user1", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
+        createFeatureUsage("user2", "FEAT-002", "PROD-001", ActionType.FEATURE_CREATED);
+        createFeatureUsage("user1", "FEAT-003", "PROD-002", ActionType.FEATURE_VIEWED);
+
+        var result = mvc.get().uri("/api/usage/product/PROD-001").exchange();
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.content.size()")
+                .asNumber()
+                .satisfies(size -> assertThat(size.intValue()).isGreaterThanOrEqualTo(2));
+    }
+
+    @Test
+    void shouldGetTopFeatures() {
+        createFeatureUsage("user1", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
+        createFeatureUsage("user2", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
+        createFeatureUsage("user3", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
+        createFeatureUsage("user1", "FEAT-002", "PROD-001", ActionType.FEATURE_VIEWED);
+
+        var result = mvc.get().uri("/api/usage/top-features?limit=5").exchange();
+        assertThat(result).hasStatusOk();
+    }
+
+    @Test
+    void shouldGetTopUsers() {
+        createFeatureUsage("user1", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
+        createFeatureUsage("user1", "FEAT-002", "PROD-001", ActionType.FEATURE_CREATED);
+        createFeatureUsage("user1", "FEAT-003", "PROD-001", ActionType.FEATURE_UPDATED);
+        createFeatureUsage("user2", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
+
+        var result = mvc.get().uri("/api/usage/top-users?limit=5").exchange();
+        assertThat(result).hasStatusOk();
+    }
+
+    @Test
+    void shouldGetUsageEventsWithPagination() {
+        for (int i = 0; i < 25; i++) {
+            createFeatureUsage("user" + i, "FEAT-" + i, "PROD-001", ActionType.FEATURE_VIEWED);
+        }
+
+        var result = mvc.get().uri("/api/usage/events?page=0&size=10").exchange();
+        assertThat(result)
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.content.size()")
+                .asNumber()
+                .isEqualTo(10);
+
+        assertThat(result)
+                .bodyJson()
+                .extractingPath("$.totalElements")
+                .asNumber()
+                .satisfies(total -> assertThat(total.intValue()).isGreaterThanOrEqualTo(25));
+    }
+
     private FeatureUsage createFeatureUsage(
             String userId, String featureCode, String productCode, ActionType actionType) {
         FeatureUsage usage = new FeatureUsage();
