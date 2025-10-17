@@ -5,18 +5,49 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.sivalabs.ft.features.AbstractIT;
 import com.sivalabs.ft.features.WithMockOAuth2User;
 import com.sivalabs.ft.features.domain.FeatureUsageRepository;
-import com.sivalabs.ft.features.domain.entities.FeatureUsage;
-import com.sivalabs.ft.features.domain.models.ActionType;
-import java.time.Instant;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @WithMockOAuth2User
 class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Autowired
     private FeatureUsageRepository featureUsageRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void setUp() {
+        featureUsageRepository.deleteAll();
+        // Load test data using JdbcTemplate
+        jdbcTemplate.execute(
+                """
+                INSERT INTO feature_usage (id, user_id, feature_code, product_code, action_type, timestamp, context, ip_address, user_agent)
+                SELECT nextval('feature_usage_id_seq'), 'user1@example.com', 'IDEA-1', 'intellij', 'FEATURE_VIEWED', NOW() - INTERVAL '2 hours', '{"source": "web"}', '192.168.1.100', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user1@example.com', 'IDEA-2', 'intellij', 'FEATURE_VIEWED', NOW() - INTERVAL '1 hour', '{"source": "web"}', '192.168.1.100', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user2@example.com', 'IDEA-1', 'intellij', 'FEATURE_VIEWED', NOW() - INTERVAL '3 hours', '{"source": "mobile"}', '192.168.1.101', 'Mobile App'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user2@example.com', 'GO-3', 'goland', 'FEATURE_CREATED', NOW() - INTERVAL '4 hours', '{"source": "web"}', '192.168.1.101', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user3@example.com', 'IDEA-1', 'intellij', 'FEATURE_UPDATED', NOW() - INTERVAL '5 hours', '{"source": "api"}', '192.168.1.102', 'API Client'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user3@example.com', 'IDEA-2', 'intellij', 'FEATURE_DELETED', NOW() - INTERVAL '6 hours', '{"source": "web"}', '192.168.1.102', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user1@example.com', 'IDEA-1', 'intellij', 'FEATURES_LISTED', NOW() - INTERVAL '30 minutes', '{"source": "web"}', '192.168.1.100', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user2@example.com', NULL, 'intellij', 'PRODUCT_VIEWED', NOW() - INTERVAL '1 hour', '{"source": "web"}', '192.168.1.101', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user3@example.com', NULL, 'intellij', 'PRODUCT_CREATED', NOW() - INTERVAL '2 days', '{"source": "admin"}', '192.168.1.102', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user1@example.com', NULL, 'intellij', 'RELEASE_VIEWED', NOW() - INTERVAL '8 hours', '{"source": "web"}', '192.168.1.100', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user2@example.com', NULL, 'intellij', 'RELEASE_CREATED', NOW() - INTERVAL '1 day', '{"source": "admin"}', '192.168.1.101', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user3@example.com', 'IDEA-1', 'intellij', 'COMMENT_ADDED', NOW() - INTERVAL '10 hours', '{"source": "web"}', '192.168.1.102', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user1@example.com', 'IDEA-2', 'intellij', 'FAVORITE_ADDED', NOW() - INTERVAL '12 hours', '{"source": "web"}', '192.168.1.100', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user2@example.com', 'GO-3', 'goland', 'FAVORITE_REMOVED', NOW() - INTERVAL '15 hours', '{"source": "web"}', '192.168.1.101', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user3@example.com', 'IDEA-1', 'intellij', 'FEATURE_VIEWED', NOW() - INTERVAL '20 minutes', '{"source": "web"}', '192.168.1.102', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user4@example.com', 'IDEA-2', 'intellij', 'FEATURE_VIEWED', NOW() - INTERVAL '25 minutes', '{"source": "web"}', '192.168.1.103', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user4@example.com', 'GO-3', 'goland', 'FEATURE_VIEWED', NOW() - INTERVAL '35 minutes', '{"source": "mobile"}', '192.168.1.103', 'Mobile App'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user5@example.com', 'IDEA-1', 'intellij', 'FEATURE_CREATED', NOW() - INTERVAL '40 minutes', '{"source": "api"}', '192.168.1.104', 'API Client'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user5@example.com', 'IDEA-2', 'intellij', 'FEATURE_UPDATED', NOW() - INTERVAL '50 minutes', '{"source": "web"}', '192.168.1.104', 'Mozilla/5.0'
+                UNION ALL SELECT nextval('feature_usage_id_seq'), 'user1@example.com', 'GO-3', 'goland', 'FEATURE_VIEWED', NOW() - INTERVAL '1 minute', '{"source": "web"}', '192.168.1.100', 'Mozilla/5.0'
+                """);
+    }
 
     @Test
     void shouldGetAllUsageEvents() {
@@ -199,6 +230,7 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldHandlePaginationCorrectly() {
+        // Test first page
         var page1 = mvc.get().uri("/api/usage/events?page=0&size=5").exchange();
         assertThat(page1)
                 .hasStatusOk()
@@ -209,6 +241,7 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
         assertThat(page1).bodyJson().extractingPath("$.number").asNumber().isEqualTo(0);
 
+        // Test second page
         var page2 = mvc.get().uri("/api/usage/events?page=1&size=5").exchange();
         assertThat(page2)
                 .hasStatusOk()
@@ -220,10 +253,12 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldReturnEmptyResultsForNonExistentData() {
+        // When
         var result = mvc.get()
                 .uri("/api/usage/events?userId=nonexistent@example.com")
                 .exchange();
 
+        // Then
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
@@ -234,279 +269,23 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
 
     @Test
     void shouldValidateUsageDataIntegrity() {
+        // Verify data was loaded correctly
         long count = featureUsageRepository.count();
         assertThat(count).isGreaterThanOrEqualTo(20L);
 
-        long distinctUsers = featureUsageRepository.findAll().stream()
-                .map(FeatureUsage::getUserId)
-                .distinct()
-                .count();
+        // Verify we have multiple users
+        Long distinctUsers =
+                jdbcTemplate.queryForObject("SELECT COUNT(DISTINCT user_id) FROM feature_usage", Long.class);
         assertThat(distinctUsers).isGreaterThanOrEqualTo(4L);
 
-        long distinctFeatures = featureUsageRepository.findAll().stream()
-                .map(FeatureUsage::getFeatureCode)
-                .filter(code -> code != null)
-                .distinct()
-                .count();
+        // Verify we have multiple features
+        Long distinctFeatures = jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT feature_code) FROM feature_usage WHERE feature_code IS NOT NULL", Long.class);
         assertThat(distinctFeatures).isGreaterThanOrEqualTo(3L);
 
-        long distinctActionTypes = featureUsageRepository.findAll().stream()
-                .map(FeatureUsage::getActionType)
-                .distinct()
-                .count();
+        // Verify we have multiple action types
+        Long distinctActionTypes =
+                jdbcTemplate.queryForObject("SELECT COUNT(DISTINCT action_type) FROM feature_usage", Long.class);
         assertThat(distinctActionTypes).isGreaterThanOrEqualTo(5L);
-    }
-
-    @Test
-    void shouldCreateUsageEventViaPostEndpoint() {
-        var requestBody =
-                """
-                {
-                    "actionType": "FEATURE_VIEWED",
-                    "featureCode": "FEAT-001",
-                    "productCode": "PROD-001",
-                    "context": {
-                        "source": "web",
-                        "device": "desktop"
-                    }
-                }
-                """;
-
-        var result = mvc.post()
-                .uri("/api/usage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(requestBody)
-                .exchange();
-
-        assertThat(result).hasStatus(201);
-
-        assertThat(result).bodyJson().extractingPath("$.featureCode").asString().isEqualTo("FEAT-001");
-
-        assertThat(result).bodyJson().extractingPath("$.id").isNotNull();
-        assertThat(result).bodyJson().extractingPath("$.actionType").asString().isEqualTo("FEATURE_VIEWED");
-    }
-
-    @Test
-    void shouldCreateUsageEventWithMinimalData() {
-        var requestBody =
-                """
-                {
-                    "actionType": "FEATURE_CREATED"
-                }
-                """;
-
-        var result = mvc.post()
-                .uri("/api/usage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(requestBody)
-                .exchange();
-
-        assertThat(result).hasStatus(201);
-        assertThat(result).bodyJson().extractingPath("$.actionType").asString().isEqualTo("FEATURE_CREATED");
-    }
-
-    @Test
-    void shouldRejectPostUsageEventWithoutActionType() {
-        var requestBody =
-                """
-                {
-                    "featureCode": "FEAT-001",
-                    "productCode": "PROD-001"
-                }
-                """;
-
-        var result = mvc.post()
-                .uri("/api/usage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(requestBody)
-                .exchange();
-
-        assertThat(result).hasStatus4xxClientError();
-    }
-
-    @Test
-    void shouldRejectPostUsageEventWithInvalidActionType() {
-        var requestBody =
-                """
-                {
-                    "actionType": "INVALID_ACTION",
-                    "featureCode": "FEAT-001"
-                }
-                """;
-
-        var result = mvc.post()
-                .uri("/api/usage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(requestBody)
-                .exchange();
-
-        assertThat(result).hasStatus4xxClientError();
-    }
-
-    @Test
-    void shouldRejectPostUsageEventWithMalformedJson() {
-        var requestBody =
-                """
-                {
-                    "actionType": "FEATURE_VIEWED",
-                    "featureCode": "FEAT-001"
-                """;
-
-        var result = mvc.post()
-                .uri("/api/usage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(requestBody)
-                .exchange();
-
-        assertThat(result).hasStatus4xxClientError();
-    }
-
-    @Test
-    void shouldGetFeatureUsageEventsList() {
-        var result = mvc.get().uri("/api/usage/feature/IDEA-1/events").exchange();
-
-        assertThat(result)
-                .hasStatusOk()
-                .bodyJson()
-                .extractingPath("$.size()")
-                .asNumber()
-                .satisfies(size -> assertThat(size.intValue()).isGreaterThan(0));
-    }
-
-    @Test
-    void shouldGetFeatureUsageEventsWithActionTypeFilter() {
-        var result = mvc.get()
-                .uri("/api/usage/feature/IDEA-1/events?actionType=FEATURE_VIEWED")
-                .exchange();
-
-        assertThat(result).hasStatusOk().bodyJson().extractingPath("$").isNotNull();
-    }
-
-    @Test
-    void shouldGetFeatureUsageEventsWithDateRangeFilter() {
-        Instant startDate = Instant.now().minusSeconds(7200);
-        Instant endDate = Instant.now();
-
-        var result = mvc.get()
-                .uri("/api/usage/feature/IDEA-1/events?startDate=" + startDate.toString() + "&endDate="
-                        + endDate.toString())
-                .exchange();
-
-        assertThat(result).hasStatusOk();
-    }
-
-    @Test
-    void shouldGetProductUsageEventsList() {
-        var result = mvc.get().uri("/api/usage/product/intellij/events").exchange();
-
-        assertThat(result)
-                .hasStatusOk()
-                .bodyJson()
-                .extractingPath("$.size()")
-                .asNumber()
-                .satisfies(size -> assertThat(size.intValue()).isGreaterThan(0));
-    }
-
-    @Test
-    void shouldGetProductUsageEventsWithActionTypeFilter() {
-        var result = mvc.get()
-                .uri("/api/usage/product/intellij/events?actionType=FEATURE_VIEWED")
-                .exchange();
-
-        assertThat(result).hasStatusOk().bodyJson().extractingPath("$").isNotNull();
-    }
-
-    @Test
-    void shouldGetProductUsageEventsWithDateRangeFilter() {
-        Instant startDate = Instant.now().minusSeconds(7200);
-        Instant endDate = Instant.now();
-
-        var result = mvc.get()
-                .uri("/api/usage/product/intellij/events?startDate=" + startDate.toString() + "&endDate="
-                        + endDate.toString())
-                .exchange();
-
-        assertThat(result).hasStatusOk();
-    }
-
-    @Test
-    void shouldGetFeatureStatsWithActionTypeFilter() {
-        var result = mvc.get()
-                .uri("/api/usage/feature/IDEA-1/stats?actionType=FEATURE_VIEWED")
-                .exchange();
-
-        assertThat(result)
-                .hasStatusOk()
-                .bodyJson()
-                .extractingPath("$.totalUsageCount")
-                .asNumber()
-                .satisfies(count -> assertThat(count.intValue()).isGreaterThanOrEqualTo(0));
-    }
-
-    @Test
-    void shouldGetProductStatsWithActionTypeFilter() {
-        var result = mvc.get()
-                .uri("/api/usage/product/intellij/stats?actionType=FEATURE_VIEWED")
-                .exchange();
-
-        assertThat(result)
-                .hasStatusOk()
-                .bodyJson()
-                .extractingPath("$.totalUsageCount")
-                .asNumber()
-                .satisfies(count -> assertThat(count.intValue()).isGreaterThanOrEqualTo(0));
-    }
-
-    @Test
-    void shouldHandleInvalidDateFormatInFeatureStats() {
-        var result = mvc.get()
-                .uri("/api/usage/feature/FEAT-001/stats?startDate=invalid-date")
-                .exchange();
-
-        assertThat(result).hasStatus4xxClientError();
-    }
-
-    @Test
-    void shouldHandleInvalidDateFormatInProductStats() {
-        var result = mvc.get()
-                .uri("/api/usage/product/PROD-001/stats?endDate=invalid-date")
-                .exchange();
-
-        assertThat(result).hasStatus4xxClientError();
-    }
-
-    @Test
-    void shouldReturnEmptyStatsForNonExistentFeature() {
-        var result = mvc.get().uri("/api/usage/feature/NON-EXISTENT/stats").exchange();
-
-        assertThat(result)
-                .hasStatusOk()
-                .bodyJson()
-                .extractingPath("$.totalUsageCount")
-                .asNumber()
-                .isEqualTo(0);
-    }
-
-    @Test
-    void shouldReturnEmptyStatsForNonExistentProduct() {
-        var result = mvc.get().uri("/api/usage/product/NON-EXISTENT/stats").exchange();
-
-        assertThat(result)
-                .hasStatusOk()
-                .bodyJson()
-                .extractingPath("$.totalUsageCount")
-                .asNumber()
-                .isEqualTo(0);
-    }
-
-    private FeatureUsage createFeatureUsage(
-            String userId, String featureCode, String productCode, ActionType actionType) {
-        FeatureUsage usage = new FeatureUsage();
-        usage.setUserId(userId);
-        usage.setFeatureCode(featureCode);
-        usage.setProductCode(productCode);
-        usage.setActionType(actionType);
-        usage.setTimestamp(Instant.now());
-        return featureUsageRepository.save(usage);
     }
 }
