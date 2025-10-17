@@ -82,12 +82,18 @@ class FeatureUsageController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        schema = @Schema(implementation = UsageStatsDto.class)))
+                                        schema = @Schema(implementation = UsageStatsDto.class))),
+                @ApiResponse(responseCode = "400", description = "Invalid date format or date range"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized")
             })
     ResponseEntity<UsageStatsDto> getUsageStats(
+            @RequestParam(required = false) ActionType actionType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
-        UsageStatsDto stats = featureUsageService.getUsageStats(startDate, endDate);
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            return ResponseEntity.badRequest().build();
+        }
+        UsageStatsDto stats = featureUsageService.getUsageStats(actionType, startDate, endDate);
         return ResponseEntity.ok(stats);
     }
 

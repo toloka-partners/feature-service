@@ -185,24 +185,29 @@ class FeatureUsageServiceTest {
         when(featureUsageRepository.countByTimestampBetween(startDate, endDate)).thenReturn(100L);
         when(featureUsageRepository.countDistinctUsers(startDate, endDate)).thenReturn(2L);
         when(featureUsageRepository.countDistinctFeatures(startDate, endDate)).thenReturn(2L);
+        when(featureUsageRepository.countDistinctProducts(startDate, endDate)).thenReturn(3L);
         when(featureUsageRepository.findActionTypeStats(startDate, endDate))
                 .thenReturn(List.of(
                         new Object[] {ActionType.FEATURE_VIEWED, 50L}, new Object[] {ActionType.FEATURE_CREATED, 30L}));
         when(featureUsageRepository.findTopFeatures(startDate, endDate))
                 .thenReturn(List.of(new Object[] {"FEAT-001", 25L}, new Object[] {"FEAT-002", 20L}));
+        when(featureUsageRepository.findTopProducts(startDate, endDate))
+                .thenReturn(List.of(new Object[] {"PROD-001", 35L}, new Object[] {"PROD-002", 25L}));
         when(featureUsageRepository.findTopUsers(startDate, endDate))
                 .thenReturn(List.of(new Object[] {"user1", 40L}, new Object[] {"user2", 30L}));
 
         // When
-        UsageStatsDto stats = featureUsageService.getUsageStats(startDate, endDate);
+        UsageStatsDto stats = featureUsageService.getUsageStats(null, startDate, endDate);
 
         // Then
         assertThat(stats).isNotNull();
-        assertThat(stats.totalEvents()).isEqualTo(100L);
-        assertThat(stats.uniqueUsers()).isEqualTo(2L);
-        assertThat(stats.uniqueFeatures()).isEqualTo(2L);
-        assertThat(stats.eventsByActionType()).hasSize(2);
+        assertThat(stats.totalUsageCount()).isEqualTo(100L);
+        assertThat(stats.uniqueUserCount()).isEqualTo(2L);
+        assertThat(stats.uniqueFeatureCount()).isEqualTo(2L);
+        assertThat(stats.uniqueProductCount()).isEqualTo(3L);
+        assertThat(stats.usageByActionType()).hasSize(2);
         assertThat(stats.topFeatures()).hasSize(2);
+        assertThat(stats.topProducts()).hasSize(2);
         assertThat(stats.topUsers()).hasSize(2);
     }
 

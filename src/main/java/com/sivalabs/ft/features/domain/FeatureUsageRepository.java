@@ -105,6 +105,28 @@ public interface FeatureUsageRepository extends JpaRepository<FeatureUsage, Long
             """)
     long countDistinctFeatures(@Param("startDate") Instant startDate, @Param("endDate") Instant endDate);
 
+    @Query(
+            """
+            SELECT COUNT(DISTINCT fu.productCode)
+            FROM FeatureUsage fu
+            WHERE fu.productCode IS NOT NULL
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            """)
+    long countDistinctProducts(@Param("startDate") Instant startDate, @Param("endDate") Instant endDate);
+
+    @Query(
+            """
+            SELECT fu.productCode, COUNT(fu) as count
+            FROM FeatureUsage fu
+            WHERE fu.productCode IS NOT NULL
+            AND (CAST(:startDate AS timestamp) IS NULL OR fu.timestamp >= :startDate)
+            AND (CAST(:endDate AS timestamp) IS NULL OR fu.timestamp <= :endDate)
+            GROUP BY fu.productCode
+            ORDER BY count DESC
+            """)
+    List<Object[]> findTopProducts(@Param("startDate") Instant startDate, @Param("endDate") Instant endDate);
+
     // Feature-specific queries
     @Query(
             """

@@ -452,7 +452,7 @@ class FeatureUsageControllerTest extends AbstractIT {
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
-                .extractingPath("$.totalEvents")
+                .extractingPath("$.totalUsageCount")
                 .asNumber()
                 .satisfies(count -> assertThat(count.intValue()).isGreaterThanOrEqualTo(0));
     }
@@ -464,7 +464,7 @@ class FeatureUsageControllerTest extends AbstractIT {
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
-                .extractingPath("$.totalEvents")
+                .extractingPath("$.totalUsageCount")
                 .asNumber()
                 .satisfies(count -> assertThat(count.intValue()).isGreaterThanOrEqualTo(0));
     }
