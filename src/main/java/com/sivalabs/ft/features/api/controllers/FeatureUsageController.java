@@ -6,6 +6,7 @@ import com.sivalabs.ft.features.domain.dtos.FeatureStatsDto;
 import com.sivalabs.ft.features.domain.dtos.FeatureUsageDto;
 import com.sivalabs.ft.features.domain.dtos.ProductStatsDto;
 import com.sivalabs.ft.features.domain.dtos.UsageStatsDto;
+import com.sivalabs.ft.features.domain.exceptions.BadRequestException;
 import com.sivalabs.ft.features.domain.models.ActionType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
@@ -24,6 +26,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,6 +39,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @RestController
 @RequestMapping("/api/usage")
 @Tag(name = "Usage Analytics API")
+@Validated
 class FeatureUsageController {
 
     private final FeatureUsageService featureUsageService;
@@ -96,10 +100,10 @@ class FeatureUsageController {
             @RequestParam(required = false) ActionType actionType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page number must be non-negative") int page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "Page size must be at least 1") int size) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            return ResponseEntity.badRequest().build();
+            throw new BadRequestException("Start date must be before or equal to end date");
         }
         Pageable pageable = PageRequest.of(page, size);
         Page<FeatureUsageDto> usageEvents = featureUsageService.findUsageEvents(
@@ -128,7 +132,7 @@ class FeatureUsageController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            return ResponseEntity.badRequest().build();
+            throw new BadRequestException("Start date must be before or equal to end date");
         }
         UsageStatsDto stats = featureUsageService.getUsageStats(startDate, endDate);
         return ResponseEntity.ok(stats);
@@ -147,8 +151,8 @@ class FeatureUsageController {
             })
     ResponseEntity<Page<FeatureUsageDto>> getUserUsage(
             @PathVariable String userId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page number must be non-negative") int page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "Page size must be at least 1") int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<FeatureUsageDto> usageEvents = featureUsageService.findByUserId(userId, pageable);
         return ResponseEntity.ok(usageEvents);
@@ -167,8 +171,8 @@ class FeatureUsageController {
             })
     ResponseEntity<Page<FeatureUsageDto>> getFeatureUsage(
             @PathVariable String featureCode,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page number must be non-negative") int page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "Page size must be at least 1") int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<FeatureUsageDto> usageEvents = featureUsageService.findByFeatureCode(featureCode, pageable);
         return ResponseEntity.ok(usageEvents);
@@ -187,8 +191,8 @@ class FeatureUsageController {
             })
     ResponseEntity<Page<FeatureUsageDto>> getProductUsage(
             @PathVariable String productCode,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page number must be non-negative") int page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "Page size must be at least 1") int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<FeatureUsageDto> usageEvents = featureUsageService.findByProductCode(productCode, pageable);
         return ResponseEntity.ok(usageEvents);
@@ -207,9 +211,9 @@ class FeatureUsageController {
     ResponseEntity<Map<String, Long>> getTopFeatures(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
-            @RequestParam(defaultValue = "10") int limit) {
+            @RequestParam(defaultValue = "10") @Min(value = 1, message = "Limit must be at least 1") int limit) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            return ResponseEntity.badRequest().build();
+            throw new BadRequestException("Start date must be before or equal to end date");
         }
         Map<String, Long> topFeatures = featureUsageService.getTopFeatures(startDate, endDate, limit);
         return ResponseEntity.ok(topFeatures);
@@ -228,9 +232,9 @@ class FeatureUsageController {
     ResponseEntity<Map<String, Long>> getTopUsers(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
-            @RequestParam(defaultValue = "10") int limit) {
+            @RequestParam(defaultValue = "10") @Min(value = 1, message = "Limit must be at least 1") int limit) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            return ResponseEntity.badRequest().build();
+            throw new BadRequestException("Start date must be before or equal to end date");
         }
         Map<String, Long> topUsers = featureUsageService.getTopUsers(startDate, endDate, limit);
         return ResponseEntity.ok(topUsers);
@@ -256,7 +260,7 @@ class FeatureUsageController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            return ResponseEntity.badRequest().build();
+            throw new BadRequestException("Start date must be before or equal to end date");
         }
         FeatureStatsDto stats = featureUsageService.getFeatureStats(featureCode, actionType, startDate, endDate);
         return ResponseEntity.ok(stats);
@@ -282,7 +286,7 @@ class FeatureUsageController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            return ResponseEntity.badRequest().build();
+            throw new BadRequestException("Start date must be before or equal to end date");
         }
         ProductStatsDto stats = featureUsageService.getProductStats(productCode, actionType, startDate, endDate);
         return ResponseEntity.ok(stats);
@@ -305,7 +309,7 @@ class FeatureUsageController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            return ResponseEntity.badRequest().build();
+            throw new BadRequestException("Start date must be before or equal to end date");
         }
         List<FeatureUsageDto> events =
                 featureUsageService.getFeatureEvents(featureCode, actionType, startDate, endDate);
@@ -329,7 +333,7 @@ class FeatureUsageController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-            return ResponseEntity.badRequest().build();
+            throw new BadRequestException("Start date must be before or equal to end date");
         }
         List<FeatureUsageDto> events =
                 featureUsageService.getProductEvents(productCode, actionType, startDate, endDate);

@@ -4,6 +4,7 @@ import static org.springframework.http.HttpStatus.*;
 
 import com.sivalabs.ft.features.domain.exceptions.BadRequestException;
 import com.sivalabs.ft.features.domain.exceptions.ResourceNotFoundException;
+import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,6 +70,25 @@ class GlobalExceptionHandler {
                     .append(error.getField())
                     .append(" - ")
                     .append(error.getDefaultMessage())
+                    .append("; ");
+        });
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(BAD_REQUEST, errorMessage.toString());
+        problemDetail.setTitle("Validation Error");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    ProblemDetail handle(ConstraintViolationException e) {
+        log.error("Constraint violation", e);
+        StringBuilder errorMessage = new StringBuilder("Validation failed: ");
+        e.getConstraintViolations().forEach(violation -> {
+            String propertyPath = violation.getPropertyPath().toString();
+            String paramName = propertyPath.substring(propertyPath.lastIndexOf('.') + 1);
+            errorMessage
+                    .append(paramName)
+                    .append(" - ")
+                    .append(violation.getMessage())
                     .append("; ");
         });
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(BAD_REQUEST, errorMessage.toString());
