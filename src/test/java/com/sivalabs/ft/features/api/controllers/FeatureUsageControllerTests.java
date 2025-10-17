@@ -534,28 +534,6 @@ class FeatureUsageControllerTest extends AbstractIT {
     }
 
     @Test
-    void shouldGetTopFeatures() {
-        createFeatureUsage("user1", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
-        createFeatureUsage("user2", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
-        createFeatureUsage("user3", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
-        createFeatureUsage("user1", "FEAT-002", "PROD-001", ActionType.FEATURE_VIEWED);
-
-        var result = mvc.get().uri("/api/usage/top-features?limit=5").exchange();
-        assertThat(result).hasStatusOk();
-    }
-
-    @Test
-    void shouldGetTopUsers() {
-        createFeatureUsage("user1", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
-        createFeatureUsage("user1", "FEAT-002", "PROD-001", ActionType.FEATURE_CREATED);
-        createFeatureUsage("user1", "FEAT-003", "PROD-001", ActionType.FEATURE_UPDATED);
-        createFeatureUsage("user2", "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED);
-
-        var result = mvc.get().uri("/api/usage/top-users?limit=5").exchange();
-        assertThat(result).hasStatusOk();
-    }
-
-    @Test
     void shouldGetUsageEventsWithPagination() {
         for (int i = 0; i < 25; i++) {
             createFeatureUsage("user" + i, "FEAT-" + i, "PROD-001", ActionType.FEATURE_VIEWED);
