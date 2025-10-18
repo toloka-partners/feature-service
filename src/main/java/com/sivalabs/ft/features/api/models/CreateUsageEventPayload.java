@@ -8,4 +8,5 @@ public record CreateUsageEventPayload(
         @NotNull(message = "Action type is required") ActionType actionType,
         String featureCode,
         String productCode,
+        String releaseCode,
         Map<String, Object> context) {}

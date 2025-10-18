@@ -44,6 +44,7 @@ public class FeatureUsageService {
             String userId,
             String featureCode,
             String productCode,
+            String releaseCode,
             ActionType actionType,
             Map<String, Object> contextData,
             String ipAddress,
@@ -65,6 +66,7 @@ public class FeatureUsageService {
             featureUsage.setUserId(userId);
             featureUsage.setFeatureCode(featureCode);
             featureUsage.setProductCode(productCode);
+            featureUsage.setReleaseCode(releaseCode);
             featureUsage.setActionType(actionType);
             featureUsage.setTimestamp(Instant.now());
             featureUsage.setContext(contextJson);
@@ -77,10 +79,11 @@ public class FeatureUsageService {
 
             FeatureUsage saved = featureUsageRepository.save(featureUsage);
             log.debug(
-                    "Logged usage: user={}, feature={}, product={}, action={}",
+                    "Logged usage: user={}, feature={}, product={}, release={}, action={}",
                     userId,
                     featureCode,
                     productCode,
+                    releaseCode,
                     actionType);
             return featureUsageMapper.toDto(saved);
         } catch (Exception e) {
@@ -92,13 +95,19 @@ public class FeatureUsageService {
 
     @Transactional
     public void logUsage(String userId, String featureCode, String productCode, ActionType actionType) {
-        logUsage(userId, featureCode, productCode, actionType, null, null, null);
+        logUsage(userId, featureCode, productCode, null, actionType, null, null, null);
     }
 
     @Transactional
     public void logUsage(
             String userId, String featureCode, String productCode, ActionType actionType, Map<String, Object> context) {
-        logUsage(userId, featureCode, productCode, actionType, context, null, null);
+        logUsage(userId, featureCode, productCode, null, actionType, context, null, null);
+    }
+
+    @Transactional
+    public void logUsage(
+            String userId, String featureCode, String productCode, String releaseCode, ActionType actionType) {
+        logUsage(userId, featureCode, productCode, releaseCode, actionType, null, null, null);
     }
 
     @Transactional(readOnly = true)

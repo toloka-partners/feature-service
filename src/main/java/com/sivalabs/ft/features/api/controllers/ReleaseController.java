@@ -85,7 +85,7 @@ class ReleaseController {
                 .orElse(ResponseEntity.notFound().build());
 
         if (username != null && result.getStatusCode().is2xxSuccessful()) {
-            featureUsageService.logUsage(username, null, null, ActionType.RELEASE_VIEWED);
+            featureUsageService.logUsage(username, null, null, code, ActionType.RELEASE_VIEWED);
         }
 
         return result;
@@ -115,7 +115,7 @@ class ReleaseController {
         log.info("Created release with code {}", code);
 
         if (username != null) {
-            featureUsageService.logUsage(username, null, payload.productCode(), ActionType.RELEASE_CREATED);
+            featureUsageService.logUsage(username, null, payload.productCode(), code, ActionType.RELEASE_CREATED);
         }
 
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()

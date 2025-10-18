@@ -25,6 +25,9 @@ public class FeatureUsage {
     @Size(max = 50) @Column(name = "product_code", length = 50)
     private String productCode;
 
+    @Size(max = 50) @Column(name = "release_code", length = 50)
+    private String releaseCode;
+
     @NotNull @Column(name = "action_type", nullable = false, length = 50)
     @Enumerated(EnumType.STRING)
     private ActionType actionType;
@@ -72,6 +75,14 @@ public class FeatureUsage {
 
     public void setProductCode(String productCode) {
         this.productCode = productCode;
+    }
+
+    public String getReleaseCode() {
+        return releaseCode;
+    }
+
+    public void setReleaseCode(String releaseCode) {
+        this.releaseCode = releaseCode;
     }
 
     public ActionType getActionType() {

@@ -230,6 +230,7 @@ class FeatureUsageController {
                 username,
                 payload.featureCode(),
                 payload.productCode(),
+                payload.releaseCode(),
                 payload.actionType(),
                 payload.context(),
                 ipAddress,

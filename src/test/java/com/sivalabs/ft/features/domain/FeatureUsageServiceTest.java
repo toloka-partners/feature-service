@@ -62,7 +62,7 @@ class FeatureUsageServiceTest {
         String userAgent = "Mozilla/5.0";
 
         // When
-        featureUsageService.logUsage(userId, featureCode, productCode, actionType, context, ipAddress, userAgent);
+        featureUsageService.logUsage(userId, featureCode, productCode, null, actionType, context, ipAddress, userAgent);
 
         // Then
         ArgumentCaptor<FeatureUsage> captor = ArgumentCaptor.forClass(FeatureUsage.class);
@@ -131,8 +131,8 @@ class FeatureUsageServiceTest {
         usage.setFeatureCode(featureCode);
         usage.setActionType(actionType);
 
-        FeatureUsageDto dto =
-                new FeatureUsageDto(1L, userId, featureCode, "PROD-001", actionType, Instant.now(), null, null, null);
+        FeatureUsageDto dto = new FeatureUsageDto(
+                1L, userId, featureCode, "PROD-001", null, actionType, Instant.now(), null, null, null);
 
         Page<FeatureUsage> usagePage = new PageImpl<>(List.of(usage));
         when(featureUsageRepository.findByFilters(userId, featureCode, null, actionType, startDate, endDate, pageable))
@@ -161,7 +161,7 @@ class FeatureUsageServiceTest {
         usage.setUserId(userId);
 
         FeatureUsageDto dto = new FeatureUsageDto(
-                1L, userId, "FEAT-001", "PROD-001", ActionType.FEATURE_VIEWED, Instant.now(), null, null, null);
+                1L, userId, "FEAT-001", "PROD-001", null, ActionType.FEATURE_VIEWED, Instant.now(), null, null, null);
 
         Page<FeatureUsage> usagePage = new PageImpl<>(List.of(usage));
         when(featureUsageRepository.findByUserId(userId, pageable)).thenReturn(usagePage);
