@@ -145,21 +145,23 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
-                .extractingPath("$.totalEvents")
+                .extractingPath("$.totalUsageCount")
                 .asNumber()
                 .satisfies(total -> assertThat(total.intValue()).isGreaterThan(0));
 
-        assertThat(result).bodyJson().extractingPath("$.uniqueUsers").asNumber().satisfies(users -> assertThat(
-                        users.intValue())
-                .isGreaterThan(0));
+        assertThat(result)
+                .bodyJson()
+                .extractingPath("$.uniqueUserCount")
+                .asNumber()
+                .satisfies(users -> assertThat(users.intValue()).isGreaterThan(0));
 
         assertThat(result)
                 .bodyJson()
-                .extractingPath("$.uniqueFeatures")
+                .extractingPath("$.uniqueFeatureCount")
                 .asNumber()
                 .satisfies(features -> assertThat(features.intValue()).isGreaterThan(0));
 
-        assertThat(result).bodyJson().extractingPath("$.eventsByActionType").isNotNull();
+        assertThat(result).bodyJson().extractingPath("$.usageByActionType").isNotNull();
 
         assertThat(result).bodyJson().extractingPath("$.topFeatures").isNotNull();
 
@@ -177,7 +179,7 @@ class FeatureUsageControllerIntegrationTest extends AbstractIT {
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
-                .extractingPath("$.totalEvents")
+                .extractingPath("$.totalUsageCount")
                 .asNumber()
                 .satisfies(total -> assertThat(total.intValue()).isGreaterThanOrEqualTo(0));
     }

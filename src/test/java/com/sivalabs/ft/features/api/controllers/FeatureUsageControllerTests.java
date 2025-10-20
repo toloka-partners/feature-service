@@ -103,7 +103,7 @@ class FeatureUsageControllerTests extends AbstractIT {
         assertThat(result)
                 .hasStatusOk()
                 .bodyJson()
-                .extractingPath("$.totalEvents")
+                .extractingPath("$.totalUsageCount")
                 .asNumber()
                 .isEqualTo(3);
     }
