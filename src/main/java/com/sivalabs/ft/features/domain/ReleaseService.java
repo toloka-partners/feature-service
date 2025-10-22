@@ -1,10 +1,12 @@
 package com.sivalabs.ft.features.domain;
 
 import com.sivalabs.ft.features.domain.Commands.CreateReleaseCommand;
+import com.sivalabs.ft.features.domain.Commands.DeleteReleaseCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateReleaseCommand;
 import com.sivalabs.ft.features.domain.dtos.ReleaseDto;
 import com.sivalabs.ft.features.domain.entities.Product;
 import com.sivalabs.ft.features.domain.entities.Release;
+import com.sivalabs.ft.features.domain.events.EventPublisher;
 import com.sivalabs.ft.features.domain.exceptions.ResourceNotFoundException;
 import com.sivalabs.ft.features.domain.mappers.ReleaseMapper;
 import com.sivalabs.ft.features.domain.models.ReleaseStatus;
@@ -21,16 +23,22 @@ public class ReleaseService {
     private final ProductRepository productRepository;
     private final FeatureRepository featureRepository;
     private final ReleaseMapper releaseMapper;
+    private final EventPublisher eventPublisher;
+    private final NotificationService notificationService;
 
     ReleaseService(
             ReleaseRepository releaseRepository,
             ProductRepository productRepository,
             FeatureRepository featureRepository,
-            ReleaseMapper releaseMapper) {
+            ReleaseMapper releaseMapper,
+            EventPublisher eventPublisher,
+            NotificationService notificationService) {
         this.releaseRepository = releaseRepository;
         this.productRepository = productRepository;
         this.featureRepository = featureRepository;
         this.releaseMapper = releaseMapper;
+        this.eventPublisher = eventPublisher;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -52,6 +60,14 @@ public class ReleaseService {
 
     @Transactional
     public String createRelease(CreateReleaseCommand cmd) {
+        // Check for duplicate event
+        if (cmd.eventId() != null && notificationService.isEventProcessed(cmd.eventId())) {
+            // Return existing release code if found
+            return releaseRepository.findByCode(cmd.code())
+                    .map(Release::getCode)
+                    .orElse(cmd.code());
+        }
+
         Product product = productRepository.findByCode(cmd.productCode()).orElseThrow();
         String code = cmd.code();
         if (!cmd.code().startsWith(product.getPrefix() + RELEASE_SEPARATOR)) {
@@ -64,27 +80,60 @@ public class ReleaseService {
         release.setStatus(ReleaseStatus.DRAFT);
         release.setCreatedBy(cmd.createdBy());
         release.setCreatedAt(Instant.now());
-        releaseRepository.save(release);
+        Release savedRelease = releaseRepository.save(release);
+        
+        // Publish event if eventId is provided (API operations)
+        if (cmd.eventId() != null) {
+            eventPublisher.publishReleaseCreatedEvent(savedRelease, cmd.eventId());
+        }
+        
         return code;
     }
 
     @Transactional
     public void updateRelease(UpdateReleaseCommand cmd) {
+        // Check for duplicate event
+        if (cmd.eventId() != null && notificationService.isEventProcessed(cmd.eventId())) {
+            return;
+        }
+
         Release release = releaseRepository.findByCode(cmd.code()).orElseThrow();
         release.setDescription(cmd.description());
         release.setStatus(cmd.status());
         release.setReleasedAt(cmd.releasedAt());
         release.setUpdatedBy(cmd.updatedBy());
         release.setUpdatedAt(Instant.now());
-        releaseRepository.save(release);
+        Release savedRelease = releaseRepository.save(release);
+        
+        // Publish event if eventId is provided (API operations)
+        if (cmd.eventId() != null) {
+            eventPublisher.publishReleaseUpdatedEvent(savedRelease, cmd.eventId());
+        }
     }
 
     @Transactional
-    public void deleteRelease(String code) {
-        if (!releaseRepository.existsByCode(code)) {
-            throw new ResourceNotFoundException("Release with code " + code + " not found");
+    public void deleteRelease(DeleteReleaseCommand cmd) {
+        // Check for duplicate event
+        if (cmd.eventId() != null && notificationService.isEventProcessed(cmd.eventId())) {
+            return;
         }
-        featureRepository.unsetRelease(code);
-        releaseRepository.deleteByCode(code);
+
+        Release release = releaseRepository.findByCode(cmd.code())
+                .orElseThrow(() -> new ResourceNotFoundException("Release with code " + cmd.code() + " not found"));
+        
+        featureRepository.unsetRelease(cmd.code());
+        releaseRepository.deleteByCode(cmd.code());
+        
+        // Publish event if eventId is provided (API operations)
+        if (cmd.eventId() != null) {
+            eventPublisher.publishReleaseDeletedEvent(release, cmd.deletedBy(), Instant.now(), cmd.eventId());
+        }
+    }
+
+    // Keep backward compatibility for existing callers
+    @Transactional
+    public void deleteRelease(String code) {
+        DeleteReleaseCommand cmd = new DeleteReleaseCommand(code, "system", null);
+        deleteRelease(cmd);
     }
 }

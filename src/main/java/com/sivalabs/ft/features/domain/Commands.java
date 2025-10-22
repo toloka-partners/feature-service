@@ -15,10 +15,12 @@ public class Commands {
             String code, String prefix, String name, String description, String imageUrl, String updatedBy) {}
 
     /* Release Commands */
-    public record CreateReleaseCommand(String productCode, String code, String description, String createdBy) {}
+    public record CreateReleaseCommand(String productCode, String code, String description, String createdBy, String eventId) {}
 
     public record UpdateReleaseCommand(
-            String code, String description, ReleaseStatus status, Instant releasedAt, String updatedBy) {}
+            String code, String description, ReleaseStatus status, Instant releasedAt, String updatedBy, String eventId) {}
+
+    public record DeleteReleaseCommand(String code, String deletedBy, String eventId) {}
 
     /* Feature Commands */
     public record CreateFeatureCommand(
