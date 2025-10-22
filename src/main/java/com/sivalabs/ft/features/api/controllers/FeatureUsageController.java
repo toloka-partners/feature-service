@@ -130,6 +130,7 @@ class FeatureUsageController {
             @RequestParam(required = false) String endDate) {
         Instant start = parseDate(startDate);
         Instant end = parseDate(endDate);
+        validateDateRange(start, end);
 
         FeatureStatsDto stats = featureUsageService.getFeatureStats(featureCode, actionType, start, end);
         return ResponseEntity.ok(stats);
@@ -157,6 +158,7 @@ class FeatureUsageController {
             @RequestParam(required = false) String endDate) {
         Instant start = parseDate(startDate);
         Instant end = parseDate(endDate);
+        validateDateRange(start, end);
 
         ProductStatsDto stats = featureUsageService.getProductStats(productCode, actionType, start, end);
         return ResponseEntity.ok(stats);
@@ -176,6 +178,7 @@ class FeatureUsageController {
                                         array =
                                                 @ArraySchema(
                                                         schema = @Schema(implementation = FeatureUsageDto.class)))),
+                @ApiResponse(responseCode = "400", description = "Invalid request"),
                 @ApiResponse(responseCode = "401", description = "Unauthorized")
             })
     ResponseEntity<List<FeatureUsageDto>> getFeatureEvents(
@@ -185,6 +188,7 @@ class FeatureUsageController {
             @RequestParam(required = false) String endDate) {
         Instant start = parseDate(startDate);
         Instant end = parseDate(endDate);
+        validateDateRange(start, end);
 
         List<FeatureUsageDto> events = featureUsageService.getFeatureEvents(featureCode, actionType, start, end);
         return ResponseEntity.ok(events);
@@ -204,6 +208,7 @@ class FeatureUsageController {
                                         array =
                                                 @ArraySchema(
                                                         schema = @Schema(implementation = FeatureUsageDto.class)))),
+                @ApiResponse(responseCode = "400", description = "Invalid request"),
                 @ApiResponse(responseCode = "401", description = "Unauthorized")
             })
     ResponseEntity<List<FeatureUsageDto>> getProductEvents(
@@ -213,6 +218,7 @@ class FeatureUsageController {
             @RequestParam(required = false) String endDate) {
         Instant start = parseDate(startDate);
         Instant end = parseDate(endDate);
+        validateDateRange(start, end);
 
         List<FeatureUsageDto> events = featureUsageService.getProductEvents(productCode, actionType, start, end);
         return ResponseEntity.ok(events);
@@ -244,6 +250,7 @@ class FeatureUsageController {
             @RequestParam(required = false) String endDate) {
         Instant start = parseDate(startDate);
         Instant end = parseDate(endDate);
+        validateDateRange(start, end);
 
         List<FeatureUsageDto> events =
                 featureUsageService.getAllEvents(actionType, userId, featureCode, productCode, start, end);
@@ -271,6 +278,7 @@ class FeatureUsageController {
             @RequestParam(required = false) String endDate) {
         Instant start = parseDate(startDate);
         Instant end = parseDate(endDate);
+        validateDateRange(start, end);
 
         UsageStatsDto stats = featureUsageService.getOverallStats(actionType, start, end);
         return ResponseEntity.ok(stats);
@@ -284,6 +292,12 @@ class FeatureUsageController {
             return Instant.parse(dateString);
         } catch (DateTimeParseException e) {
             throw new BadRequestException("Invalid date format: " + dateString + ". Expected ISO 8601 format.");
+        }
+    }
+
+    private void validateDateRange(Instant startDate, Instant endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new BadRequestException("Start date must be before or equal to end date");
         }
     }
 }
