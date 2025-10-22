@@ -4,6 +4,7 @@ import com.sivalabs.ft.features.api.models.CreateReleasePayload;
 import com.sivalabs.ft.features.api.models.UpdateReleasePayload;
 import com.sivalabs.ft.features.api.utils.SecurityUtils;
 import com.sivalabs.ft.features.domain.Commands.CreateReleaseCommand;
+import com.sivalabs.ft.features.domain.Commands.DeleteReleaseCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateReleaseCommand;
 import com.sivalabs.ft.features.domain.ReleaseService;
 import com.sivalabs.ft.features.domain.dtos.ReleaseDto;
@@ -17,6 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -99,7 +101,8 @@ class ReleaseController {
             })
     ResponseEntity<Void> createRelease(@RequestBody @Valid CreateReleasePayload payload) {
         var username = SecurityUtils.getCurrentUsername();
-        var cmd = new CreateReleaseCommand(payload.productCode(), payload.code(), payload.description(), username);
+        var eventId = UUID.randomUUID().toString();
+        var cmd = new CreateReleaseCommand(payload.productCode(), payload.code(), payload.description(), username, eventId);
         String code = releaseService.createRelease(cmd);
         log.info("Created release with code {}", code);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
@@ -121,8 +124,9 @@ class ReleaseController {
             })
     void updateRelease(@PathVariable String code, @RequestBody UpdateReleasePayload payload) {
         var username = SecurityUtils.getCurrentUsername();
+        var eventId = UUID.randomUUID().toString();
         var cmd =
-                new UpdateReleaseCommand(code, payload.description(), payload.status(), payload.releasedAt(), username);
+                new UpdateReleaseCommand(code, payload.description(), payload.status(), payload.releasedAt(), username, eventId);
         releaseService.updateRelease(cmd);
     }
 
@@ -140,7 +144,10 @@ class ReleaseController {
         if (!releaseService.isReleaseExists(code)) {
             return ResponseEntity.notFound().build();
         }
-        releaseService.deleteRelease(code);
+        var username = SecurityUtils.getCurrentUsername();
+        var eventId = UUID.randomUUID().toString();
+        var cmd = new DeleteReleaseCommand(code, username, eventId);
+        releaseService.deleteRelease(cmd);
         return ResponseEntity.ok().build();
     }
 }
