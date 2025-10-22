@@ -39,6 +39,12 @@ public class FeatureUsage {
     @Column(name = "context", length = Integer.MAX_VALUE)
     private String context;
 
+    @Size(max = 50) @Column(name = "ip_address", length = 50)
+    private String ipAddress;
+
+    @Column(name = "user_agent", length = Integer.MAX_VALUE)
+    private String userAgent;
+
     public Long getId() {
         return id;
     }
@@ -101,5 +107,21 @@ public class FeatureUsage {
 
     public void setContext(String context) {
         this.context = context;
+    }
+
+    public String getIpAddress() {
+        return ipAddress;
+    }
+
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+    }
+
+    public String getUserAgent() {
+        return userAgent;
+    }
+
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent;
     }
 }
