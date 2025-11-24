@@ -44,6 +44,9 @@ public class Release {
     @Enumerated(EnumType.STRING)
     private ReleaseStatus status;
 
+    @Column(name = "planned_release_date")
+    private Instant plannedReleaseDate;
+
     @Column(name = "released_at")
     private Instant releasedAt;
 
@@ -101,6 +104,14 @@ public class Release {
 
     public void setStatus(ReleaseStatus status) {
         this.status = status;
+    }
+
+    public Instant getPlannedReleaseDate() {
+        return plannedReleaseDate;
+    }
+
+    public void setPlannedReleaseDate(Instant plannedReleaseDate) {
+        this.plannedReleaseDate = plannedReleaseDate;
     }
 
     public Instant getReleasedAt() {
