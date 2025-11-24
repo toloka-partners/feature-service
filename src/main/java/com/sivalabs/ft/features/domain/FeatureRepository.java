@@ -1,11 +1,13 @@
 package com.sivalabs.ft.features.domain;
 
 import com.sivalabs.ft.features.domain.entities.Feature;
+import com.sivalabs.ft.features.domain.models.FeaturePlanningStatus;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.ListCrudRepository;
+import org.springframework.data.repository.query.Param;
 
 interface FeatureRepository extends ListCrudRepository<Feature, Long> {
     @Query("select f from Feature f left join fetch f.release where f.code = :code")
@@ -16,6 +18,22 @@ interface FeatureRepository extends ListCrudRepository<Feature, Long> {
 
     @Query("select f from Feature f left join fetch f.release where f.product.code = :productCode")
     List<Feature> findByProductCode(String productCode);
+
+    @Query(
+            """
+        select f from Feature f left join fetch f.release
+        where f.release.code = :releaseCode
+        and (:status is null or f.planningStatus = :status)
+        and (:owner is null or f.featureOwner = :owner)
+        and (:overdue = false or (f.plannedCompletionDate < current_timestamp and f.planningStatus <> 'DONE'))
+        and (:blocked = false or f.planningStatus = 'BLOCKED')
+        """)
+    List<Feature> findByReleaseCodeWithFilters(
+            @Param("releaseCode") String releaseCode,
+            @Param("status") FeaturePlanningStatus status,
+            @Param("owner") String owner,
+            @Param("overdue") boolean overdue,
+            @Param("blocked") boolean blocked);
 
     @Modifying
     void deleteByCode(String code);
