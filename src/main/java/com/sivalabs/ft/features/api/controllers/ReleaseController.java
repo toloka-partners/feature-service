@@ -4,6 +4,7 @@ import com.sivalabs.ft.features.api.models.CreateReleasePayload;
 import com.sivalabs.ft.features.api.models.UpdateReleasePayload;
 import com.sivalabs.ft.features.api.utils.SecurityUtils;
 import com.sivalabs.ft.features.domain.Commands.CreateReleaseCommand;
+import com.sivalabs.ft.features.domain.Commands.DeleteReleaseCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateReleaseCommand;
 import com.sivalabs.ft.features.domain.ReleaseService;
 import com.sivalabs.ft.features.domain.dtos.ReleaseDto;
@@ -17,6 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -99,7 +101,11 @@ class ReleaseController {
             })
     ResponseEntity<Void> createRelease(@RequestBody @Valid CreateReleasePayload payload) {
         var username = SecurityUtils.getCurrentUsername();
-        var cmd = new CreateReleaseCommand(payload.productCode(), payload.code(), payload.description(), username);
+        String eventId = payload.eventId() != null
+                ? payload.eventId()
+                : UUID.randomUUID().toString();
+        var cmd = new CreateReleaseCommand(
+                eventId, payload.productCode(), payload.code(), payload.description(), username);
         String code = releaseService.createRelease(cmd);
         log.info("Created release with code {}", code);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
@@ -121,8 +127,11 @@ class ReleaseController {
             })
     void updateRelease(@PathVariable String code, @RequestBody UpdateReleasePayload payload) {
         var username = SecurityUtils.getCurrentUsername();
-        var cmd =
-                new UpdateReleaseCommand(code, payload.description(), payload.status(), payload.releasedAt(), username);
+        String eventId = payload.eventId() != null
+                ? payload.eventId()
+                : UUID.randomUUID().toString();
+        var cmd = new UpdateReleaseCommand(
+                eventId, code, payload.description(), payload.status(), payload.releasedAt(), username);
         releaseService.updateRelease(cmd);
     }
 
@@ -136,11 +145,15 @@ class ReleaseController {
                 @ApiResponse(responseCode = "401", description = "Unauthorized"),
                 @ApiResponse(responseCode = "403", description = "Forbidden"),
             })
-    ResponseEntity<Void> deleteRelease(@PathVariable String code) {
+    ResponseEntity<Void> deleteRelease(
+            @PathVariable String code, @RequestParam(value = "eventId", required = false) String eventId) {
         if (!releaseService.isReleaseExists(code)) {
             return ResponseEntity.notFound().build();
         }
-        releaseService.deleteRelease(code);
+        var username = SecurityUtils.getCurrentUsername();
+        String finalEventId = eventId != null ? eventId : UUID.randomUUID().toString();
+        var cmd = new DeleteReleaseCommand(finalEventId, code, username);
+        releaseService.deleteRelease(cmd);
         return ResponseEntity.ok().build();
     }
 }

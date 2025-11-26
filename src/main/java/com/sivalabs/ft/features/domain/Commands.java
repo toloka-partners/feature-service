@@ -15,13 +15,22 @@ public class Commands {
             String code, String prefix, String name, String description, String imageUrl, String updatedBy) {}
 
     /* Release Commands */
-    public record CreateReleaseCommand(String productCode, String code, String description, String createdBy) {}
+    public record CreateReleaseCommand(
+            String eventId, String productCode, String code, String description, String createdBy) {}
 
     public record UpdateReleaseCommand(
-            String code, String description, ReleaseStatus status, Instant releasedAt, String updatedBy) {}
+            String eventId,
+            String code,
+            String description,
+            ReleaseStatus status,
+            Instant releasedAt,
+            String updatedBy) {}
+
+    public record DeleteReleaseCommand(String eventId, String code, String deletedBy) {}
 
     /* Feature Commands */
     public record CreateFeatureCommand(
+            String eventId,
             String productCode,
             String releaseCode,
             String title,
@@ -30,6 +39,7 @@ public class Commands {
             String createdBy) {}
 
     public record UpdateFeatureCommand(
+            String eventId,
             String code,
             String title,
             String description,
@@ -38,7 +48,7 @@ public class Commands {
             String assignedTo,
             String updatedBy) {}
 
-    public record DeleteFeatureCommand(String code, String deletedBy) {}
+    public record DeleteFeatureCommand(String eventId, String code, String deletedBy) {}
 
     /* Comment Commands */
     public record CreateCommentCommand(String featureCode, String content, String createdBy) {}

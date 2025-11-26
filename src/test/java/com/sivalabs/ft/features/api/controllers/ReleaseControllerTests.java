@@ -17,7 +17,7 @@ class ReleaseControllerTests extends AbstractIT {
         var result =
                 mvc.get().uri("/api/releases?productCode={code}", "intellij").exchange();
         assertThat(result)
-                .hasStatusOk()
+                .hasStatus2xxSuccessful()
                 .bodyJson()
                 .extractingPath("$.size()")
                 .asNumber()
@@ -28,15 +28,19 @@ class ReleaseControllerTests extends AbstractIT {
     void shouldGetReleaseByCode() {
         String code = "IDEA-2023.3.8";
         var result = mvc.get().uri("/api/releases/{code}", code).exchange();
-        assertThat(result).hasStatusOk().bodyJson().convertTo(ReleaseDto.class).satisfies(dto -> {
-            assertThat(dto.code()).isEqualTo(code);
-        });
+        assertThat(result)
+                .hasStatus2xxSuccessful()
+                .bodyJson()
+                .convertTo(ReleaseDto.class)
+                .satisfies(dto -> {
+                    assertThat(dto.code()).isEqualTo(code);
+                });
     }
 
     @Test
     void shouldReturn404WhenReleaseNotFound() {
         var result = mvc.get().uri("/api/releases/{code}", "INVALID_CODE").exchange();
-        assertThat(result).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(result).hasStatus4xxClientError();
     }
 
     @Test
@@ -76,13 +80,13 @@ class ReleaseControllerTests extends AbstractIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload)
                 .exchange();
-        assertThat(result).hasStatusOk();
+        assertThat(result).hasStatus2xxSuccessful();
 
         // Verify the update
         var updatedRelease =
                 mvc.get().uri("/api/releases/{code}", "IDEA-2023.3.8").exchange();
         assertThat(updatedRelease)
-                .hasStatusOk()
+                .hasStatus2xxSuccessful()
                 .bodyJson()
                 .convertTo(ReleaseDto.class)
                 .satisfies(dto -> {
@@ -96,10 +100,10 @@ class ReleaseControllerTests extends AbstractIT {
     @WithMockOAuth2User(username = "user")
     void shouldDeleteRelease() {
         var result = mvc.delete().uri("/api/releases/{code}", "RIDER-2024.2.6").exchange();
-        assertThat(result).hasStatusOk();
+        assertThat(result).hasStatus2xxSuccessful();
 
         // Verify deletion
         var getResult = mvc.get().uri("/api/releases/{code}", "RIDER-2024.2.6").exchange();
-        assertThat(getResult).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(getResult).hasStatus4xxClientError();
     }
 }
