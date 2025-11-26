@@ -5,8 +5,10 @@ import com.sivalabs.ft.features.api.models.UpdateReleasePayload;
 import com.sivalabs.ft.features.api.utils.SecurityUtils;
 import com.sivalabs.ft.features.domain.Commands.CreateReleaseCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateReleaseCommand;
+import com.sivalabs.ft.features.domain.FeatureUsageService;
 import com.sivalabs.ft.features.domain.ReleaseService;
 import com.sivalabs.ft.features.domain.dtos.ReleaseDto;
+import com.sivalabs.ft.features.domain.models.ActionType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -37,9 +39,11 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 class ReleaseController {
     private static final Logger log = LoggerFactory.getLogger(ReleaseController.class);
     private final ReleaseService releaseService;
+    private final FeatureUsageService featureUsageService;
 
-    ReleaseController(ReleaseService releaseService) {
+    ReleaseController(ReleaseService releaseService, FeatureUsageService featureUsageService) {
         this.releaseService = releaseService;
+        this.featureUsageService = featureUsageService;
     }
 
     @GetMapping("")
@@ -74,10 +78,17 @@ class ReleaseController {
                 @ApiResponse(responseCode = "404", description = "Release not found")
             })
     ResponseEntity<ReleaseDto> getRelease(@PathVariable String code) {
-        return releaseService
+        var username = SecurityUtils.getCurrentUsername();
+        var result = releaseService
                 .findReleaseByCode(code)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+
+        if (username != null && result.getStatusCode().is2xxSuccessful()) {
+            featureUsageService.logUsage(username, null, null, ActionType.RELEASE_VIEWED);
+        }
+
+        return result;
     }
 
     @PostMapping("")
@@ -102,6 +113,11 @@ class ReleaseController {
         var cmd = new CreateReleaseCommand(payload.productCode(), payload.code(), payload.description(), username);
         String code = releaseService.createRelease(cmd);
         log.info("Created release with code {}", code);
+
+        if (username != null) {
+            featureUsageService.logUsage(username, null, payload.productCode(), ActionType.RELEASE_CREATED);
+        }
+
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{code}")
                 .buildAndExpand(code)
