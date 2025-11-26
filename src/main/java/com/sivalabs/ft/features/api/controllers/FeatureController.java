@@ -1,13 +1,14 @@
 package com.sivalabs.ft.features.api.controllers;
 
-import com.sivalabs.ft.features.api.models.CreateFeaturePayload;
-import com.sivalabs.ft.features.api.models.UpdateFeaturePayload;
+import com.sivalabs.ft.features.api.models.*;
 import com.sivalabs.ft.features.api.utils.SecurityUtils;
 import com.sivalabs.ft.features.domain.*;
 import com.sivalabs.ft.features.domain.Commands.CreateFeatureCommand;
 import com.sivalabs.ft.features.domain.Commands.DeleteFeatureCommand;
+import com.sivalabs.ft.features.domain.Commands.RemoveCategoryFromFeaturesCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateFeatureCommand;
 import com.sivalabs.ft.features.domain.dtos.FeatureDto;
+import com.sivalabs.ft.features.domain.exceptions.ResourceNotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -52,8 +53,10 @@ class FeatureController {
 
     @GetMapping("")
     @Operation(
-            summary = "Find features by product or release",
-            description = "Find features by product or release",
+            summary = "Find features by product, release, tags, or categories with tags",
+            description = "Find features by product, release, tags, or combination of categories and tags. "
+                    + "Only one of the following is allowed: productCode, releaseCode, tagIds, or (categoryIds + tagIds). "
+                    + "If categoryIds and tagIds are both provided, returns features matching both criteria.",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
@@ -61,23 +64,51 @@ class FeatureController {
                         content =
                                 @Content(
                                         mediaType = "application/json",
-                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class))))
+                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class)))),
+                @ApiResponse(responseCode = "400", description = "Invalid request - multiple search criteria provided")
             })
     List<FeatureDto> getFeatures(
             @RequestParam(value = "productCode", required = false) String productCode,
-            @RequestParam(value = "releaseCode", required = false) String releaseCode) {
-        // Only one of productCode or releaseCode should be provided
-        if ((StringUtils.isBlank(productCode) && StringUtils.isBlank(releaseCode))
-                || (StringUtils.isNotBlank(productCode) && StringUtils.isNotBlank(releaseCode))) {
-            // TODO: Return 400 Bad Request
-            return List.of();
-        }
+            @RequestParam(value = "releaseCode", required = false) String releaseCode,
+            @RequestParam(value = "tagIds", required = false) List<Long> tagIds,
+            @RequestParam(value = "categoryIds", required = false) List<Long> categoryIds) {
         String username = SecurityUtils.getCurrentUsername();
-        List<FeatureDto> featureDtos;
-        if (StringUtils.isNotBlank(productCode)) {
+
+        boolean hasProductCode = StringUtils.isNotBlank(productCode);
+        boolean hasReleaseCode = StringUtils.isNotBlank(releaseCode);
+        boolean hasTagIds = tagIds != null && !tagIds.isEmpty();
+        boolean hasCategoryIds = categoryIds != null && !categoryIds.isEmpty();
+
+        // Validate that only one search criterion is provided
+        // Exception: categoryIds and tagIds can be used together
+        int criteriaCount = 0;
+        if (hasProductCode) criteriaCount++;
+        if (hasReleaseCode) criteriaCount++;
+        if (hasTagIds && !hasCategoryIds) criteriaCount++;
+        if (hasCategoryIds) criteriaCount++;
+
+        if (criteriaCount == 0) {
+            throw new com.sivalabs.ft.features.domain.exceptions.BadRequestException(
+                    "At least one search parameter must be provided: productCode, releaseCode, tagIds, or categoryIds");
+        }
+        if (criteriaCount > 1) {
+            throw new com.sivalabs.ft.features.domain.exceptions.BadRequestException(
+                    "Only one search criterion is allowed: productCode, releaseCode, tagIds alone, or (categoryIds with optional tagIds)");
+        }
+
+        List<FeatureDto> featureDtos = List.of();
+        if (hasProductCode) {
             featureDtos = featureService.findFeaturesByProduct(username, productCode);
-        } else {
+        } else if (hasReleaseCode) {
             featureDtos = featureService.findFeaturesByRelease(username, releaseCode);
+        } else if (hasCategoryIds) {
+            if (hasTagIds) {
+                featureDtos = featureService.findFeaturesByCategoriesAndTags(username, categoryIds, tagIds);
+            } else {
+                featureDtos = featureService.findFeaturesByCategories(username, categoryIds);
+            }
+        } else if (hasTagIds) {
+            featureDtos = featureService.findFeaturesByTags(username, tagIds);
         }
 
         if (username != null && !featureDtos.isEmpty()) {
@@ -196,5 +227,93 @@ class FeatureController {
         var cmd = new DeleteFeatureCommand(code, username);
         featureService.deleteFeature(cmd);
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/tags")
+    @Operation(
+            summary = "Assign tags to multiple features",
+            description = "Assign multiple tags to multiple features",
+            responses = {
+                @ApiResponse(responseCode = "200", description = "Successful response"),
+                @ApiResponse(responseCode = "400", description = "Invalid request"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized"),
+                @ApiResponse(responseCode = "403", description = "Forbidden"),
+                @ApiResponse(responseCode = "404", description = "Feature or Tag not found")
+            })
+    ResponseEntity<Void> assignTagsToFeatures(@RequestBody @Valid AssignTagsToFeaturesPayload payload) {
+        var username = SecurityUtils.getCurrentUsername();
+        var cmd = new Commands.AssignTagsToFeaturesCommand(payload.featureCodes(), payload.tagIds(), username);
+        try {
+            featureService.assignTagsToFeatures(cmd);
+            return ResponseEntity.ok().build();
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/tags")
+    @Operation(
+            summary = "Remove tags from multiple features",
+            description = "Remove given tags from multiple features",
+            responses = {
+                @ApiResponse(responseCode = "200", description = "Successful response"),
+                @ApiResponse(responseCode = "400", description = "Invalid request"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized"),
+                @ApiResponse(responseCode = "403", description = "Forbidden"),
+                @ApiResponse(responseCode = "404", description = "Feature or Tag not found")
+            })
+    ResponseEntity<Void> removeTagsToFeatures(@RequestBody @Valid RemoveTagsFromFeaturesPayload payload) {
+        var username = SecurityUtils.getCurrentUsername();
+        var cmd = new Commands.RemoveTagsFromFeaturesCommand(payload.featureCodes(), payload.tagIds(), username);
+        try {
+            featureService.removeTagsFromFeatures(cmd);
+            return ResponseEntity.ok().build();
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PostMapping("/category")
+    @Operation(
+            summary = "Assign category to multiple features",
+            description = "Assign a category to multiple features",
+            responses = {
+                @ApiResponse(responseCode = "200", description = "Successful response"),
+                @ApiResponse(responseCode = "400", description = "Invalid request"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized"),
+                @ApiResponse(responseCode = "403", description = "Forbidden"),
+                @ApiResponse(responseCode = "404", description = "Category or Feature not found")
+            })
+    ResponseEntity<Void> assignCategoryToFeatures(@RequestBody @Valid AssignCategoryToFeaturesPayload payload) {
+        var username = SecurityUtils.getCurrentUsername();
+        var cmd = new Commands.AssignCategoryToFeaturesCommand(payload.featureCodes(), payload.categoryId(), username);
+        try {
+            featureService.assignCategoryToFeatures(cmd);
+            return ResponseEntity.ok().build();
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/category")
+    @Operation(
+            summary = "Remove category from multiple features",
+            description = "Remove category from multiple features",
+            responses = {
+                @ApiResponse(responseCode = "200", description = "Successful response"),
+                @ApiResponse(responseCode = "400", description = "Invalid request"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized"),
+                @ApiResponse(responseCode = "403", description = "Forbidden"),
+                @ApiResponse(responseCode = "404", description = "Feature not found")
+            })
+    ResponseEntity<Void> removeCategoryFromFeatures(@RequestBody @Valid RemoveCategoryFromFeaturesPayload payload) {
+        var username = SecurityUtils.getCurrentUsername();
+        var cmd = new RemoveCategoryFromFeaturesCommand(payload.featureCodes(), username);
+        try {
+            featureService.removeCategoryFromFeatures(cmd);
+            return ResponseEntity.ok().build();
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }

@@ -17,15 +17,29 @@ interface FeatureRepository extends ListCrudRepository<Feature, Long> {
     @Query("select f from Feature f left join fetch f.release where f.product.code = :productCode")
     List<Feature> findByProductCode(String productCode);
 
+    @Query("select distinct f from Feature f left join fetch f.release join f.tags t where t.id in :tagIds")
+    List<Feature> findByTagIds(List<Long> tagIds);
+
+    @Query("select distinct f from Feature f left join fetch f.release where f.category.id in :categoryIds")
+    List<Feature> findByCategoryIds(List<Long> categoryIds);
+
+    @Query(
+            "select distinct f from Feature f left join fetch f.release left join f.tags t where f.category.id in :categoryIds or t.id in :tagIds")
+    List<Feature> findByCategoryIdsAndTagIds(List<Long> categoryIds, List<Long> tagIds);
+
     @Modifying
     void deleteByCode(String code);
 
     @Modifying
-    @Query("update Feature f set f.release = null where f.release.code = :code")
-    void unsetRelease(String code);
+    @Query("update Feature f set f.release.code = null where f.release.code = :code")
+    void unlinkReleaseCode(String code);
 
     boolean existsByCode(String code);
 
     @Query(value = "select nextval('feature_code_seq')", nativeQuery = true)
     long getNextFeatureId();
+
+    @Modifying
+    @Query("update Feature f set f.category = null where f.category.id = :id")
+    void unlinkCategory(Long id);
 }
