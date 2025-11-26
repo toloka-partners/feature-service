@@ -1,6 +1,8 @@
 name: PR Label Management
 
 on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
   pull_request:
     types: [opened, reopened, synchronize]
   pull_request_review:
@@ -22,7 +24,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             // Add Review label to the PR
             await github.rest.issues.addLabels({
@@ -86,7 +88,7 @@ jobs:
         if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             const prNumber = context.payload.pull_request.number;
             
