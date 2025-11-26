@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -134,5 +135,12 @@ public class FeatureService {
         favoriteFeatureRepository.deleteByFeatureCode(cmd.code());
         featureRepository.deleteByCode(cmd.code());
         eventPublisher.publishFeatureDeletedEvent(feature, cmd.deletedBy(), Instant.now());
+    }
+
+    @Transactional(readOnly = true)
+    @Cacheable(value = "featuresByAssignee", key = "#assignee")
+    public List<FeatureDto> findByAssignee(String username, String assignee) {
+        List<Feature> features = featureRepository.findByAssignee(assignee);
+        return updateFavoriteStatus(features, username);
     }
 }
