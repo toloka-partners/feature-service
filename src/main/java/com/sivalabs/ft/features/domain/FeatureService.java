@@ -105,7 +105,7 @@ public class FeatureService {
         feature.setCreatedBy(cmd.createdBy());
         feature.setCreatedAt(Instant.now());
         featureRepository.save(feature);
-        eventPublisher.publishFeatureCreatedEvent(feature);
+        eventPublisher.publishFeatureCreatedEvent(cmd.eventId(), feature);
         return code;
     }
 
@@ -125,7 +125,7 @@ public class FeatureService {
         feature.setUpdatedBy(cmd.updatedBy());
         feature.setUpdatedAt(Instant.now());
         featureRepository.save(feature);
-        eventPublisher.publishFeatureUpdatedEvent(feature);
+        eventPublisher.publishFeatureUpdatedEvent(cmd.eventId(), feature);
     }
 
     @Transactional
@@ -133,6 +133,6 @@ public class FeatureService {
         Feature feature = featureRepository.findByCode(cmd.code()).orElseThrow();
         favoriteFeatureRepository.deleteByFeatureCode(cmd.code());
         featureRepository.deleteByCode(cmd.code());
-        eventPublisher.publishFeatureDeletedEvent(feature, cmd.deletedBy(), Instant.now());
+        eventPublisher.publishFeatureDeletedEvent(cmd.eventId(), feature, cmd.deletedBy(), Instant.now());
     }
 }

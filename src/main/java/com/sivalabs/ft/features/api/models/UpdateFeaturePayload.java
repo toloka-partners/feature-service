@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
 public record UpdateFeaturePayload(
+        @NotEmpty(message = "Event ID is required") String eventId,
         @NotEmpty(message = "Title is required") @Size(max = 500, message = "Title cannot exceed 500 characters") String title,
         String description,
         String releaseCode,
