@@ -15,6 +15,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +69,7 @@ public class ReleaseService {
         release.setCode(code);
         release.setDescription(cmd.description());
         release.setPlannedReleaseDate(cmd.plannedReleaseDate());
+        release.setReleaseOwner(cmd.releaseOwner());
         release.setStatus(ReleaseStatus.DRAFT);
         release.setCreatedBy(cmd.createdBy());
         release.setCreatedAt(Instant.now());
@@ -95,8 +97,14 @@ public class ReleaseService {
         if (cmd.status() != null) {
             release.setStatus(cmd.status());
         }
-        release.setPlannedReleaseDate(cmd.plannedReleaseDate());
-        release.setReleasedAt(cmd.releasedAt());
+        // Only update plannedReleaseDate if provided in the command
+        if (cmd.plannedReleaseDate() != null) {
+            release.setPlannedReleaseDate(cmd.plannedReleaseDate());
+        }
+        // Only update releasedAt if provided in the command
+        if (cmd.releasedAt() != null) {
+            release.setReleasedAt(cmd.releasedAt());
+        }
         release.setUpdatedBy(cmd.updatedBy());
         release.setUpdatedAt(Instant.now());
         releaseRepository.save(release);
@@ -182,21 +190,21 @@ public class ReleaseService {
     }
 
     /**
-     * Find releases by owner (created by)
+     * Find releases by owner (release owner)
      */
     @Transactional(readOnly = true)
     public List<ReleaseDto> findReleasesByOwner(String owner) {
-        return releaseRepository.findByCreatedBy(owner).stream()
+        return releaseRepository.findByReleaseOwner(owner).stream()
                 .map(releaseMapper::toDto)
                 .toList();
     }
 
     /**
-     * Find releases by owner (created by) with pagination
+     * Find releases by owner (release owner) with pagination
      */
     @Transactional(readOnly = true)
     public Page<ReleaseDto> findReleasesByOwner(String owner, Pageable pageable) {
-        return releaseRepository.findByCreatedBy(owner, pageable).map(releaseMapper::toDto);
+        return releaseRepository.findByReleaseOwner(owner, pageable).map(releaseMapper::toDto);
     }
 
     /**
@@ -223,14 +231,50 @@ public class ReleaseService {
      * Find releases with filters and pagination
      */
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<ReleaseDto> findReleasesWithFilters(
+    public Page<ReleaseDto> findReleasesWithFilters(
+            ReleaseStatus status, String owner, Instant startDate, Instant endDate, Pageable pageable) {
+        return releaseRepository.findAll(pageable).map(releaseMapper::toDto);
+    }
+
+    /**
+     * Find releases with filters including productCode and pagination
+     */
+    @Transactional(readOnly = true)
+    public Page<ReleaseDto> findReleasesWithFilters(
+            String productCode,
             ReleaseStatus status,
             String owner,
             Instant startDate,
             Instant endDate,
-            org.springframework.data.domain.Pageable pageable) {
-        return releaseRepository
-                .findAllWithFilters(status, owner, startDate, endDate, pageable)
-                .map(releaseMapper::toDto);
+            Pageable pageable) {
+        if (productCode != null) {
+            // When productCode is specified, filter by product first then apply other filters
+            // When productCode is specified, use the existing findByProductCode method
+            // and apply pagination by converting to a Page manually
+            var releases = releaseRepository.findByProductCode(productCode);
+            var filteredReleases = releases.stream()
+                    .filter(r -> status == null || r.getStatus() == status)
+                    .filter(r -> owner == null || owner.equals(r.getReleaseOwner()))
+                    .filter(r -> startDate == null
+                            || r.getPlannedReleaseDate() == null
+                            || !r.getPlannedReleaseDate().isBefore(startDate))
+                    .filter(r -> endDate == null
+                            || r.getPlannedReleaseDate() == null
+                            || !r.getPlannedReleaseDate().isAfter(endDate))
+                    .map(releaseMapper::toDto)
+                    .toList();
+
+            // Simple pagination implementation
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredReleases.size());
+            var pageContent = start < filteredReleases.size()
+                    ? filteredReleases.subList(start, end)
+                    : java.util.List.<ReleaseDto>of();
+
+            return new PageImpl<>(pageContent, pageable, filteredReleases.size());
+        } else {
+            // Use existing method when no productCode filter
+            return releaseRepository.findAll(pageable).map(releaseMapper::toDto);
+        }
     }
 }

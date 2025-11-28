@@ -14,5 +14,6 @@ public record ReleaseDto(
         String createdBy,
         Instant createdAt,
         String updatedBy,
-        Instant updatedAt)
+        Instant updatedAt,
+        String releaseOwner)
         implements Serializable {}
