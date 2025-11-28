@@ -7,6 +7,7 @@ import com.sivalabs.ft.features.domain.Commands.CreateReleaseCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateReleaseCommand;
 import com.sivalabs.ft.features.domain.ReleaseService;
 import com.sivalabs.ft.features.domain.dtos.ReleaseDto;
+import com.sivalabs.ft.features.domain.models.ReleaseStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -16,10 +17,18 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
-import java.util.List;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -44,8 +53,8 @@ class ReleaseController {
 
     @GetMapping("")
     @Operation(
-            summary = "Find releases by product code",
-            description = "Find releases by product code",
+            summary = "Find releases with optional filters and pagination",
+            description = "Find releases by product code or with filters and pagination",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
@@ -55,8 +64,40 @@ class ReleaseController {
                                         mediaType = "application/json",
                                         array = @ArraySchema(schema = @Schema(implementation = ReleaseDto.class))))
             })
-    List<ReleaseDto> getProductReleases(@RequestParam("productCode") String productCode) {
-        return releaseService.findReleasesByProductCode(productCode);
+    ResponseEntity<?> getReleases(
+            @RequestParam(value = "productCode", required = false) String productCode,
+            @RequestParam(value = "status", required = false) ReleaseStatus status,
+            @RequestParam(value = "owner", required = false) String owner,
+            @RequestParam(value = "startDate", required = false) String startDate,
+            @RequestParam(value = "endDate", required = false) String endDate,
+            @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "20") int size,
+            @RequestParam(value = "sort", required = false, defaultValue = "createdAt") String sort,
+            @RequestParam(value = "direction", required = false, defaultValue = "DESC") String direction) {
+
+        // Enhanced search with pagination and filters (including productCode)
+        try {
+            Instant startInstant = parseDate(startDate);
+            Instant endInstant = parseDate(endDate);
+
+            // Validate date range
+            if (startInstant != null && endInstant != null && startInstant.isAfter(endInstant)) {
+                return ResponseEntity.badRequest().body("startDate must be before or equal to endDate");
+            }
+
+            Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+            // JPQL queries - use Java field names directly
+            // Cap page size at 100
+            int cappedSize = Math.min(size, 100);
+            Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
+
+            Page<ReleaseDto> releasePage = releaseService.findReleasesWithFilters(
+                    productCode, status, owner, startInstant, endInstant, pageable);
+
+            return ResponseEntity.ok(releasePage);
+        } catch (DateTimeParseException e) {
+            return ResponseEntity.badRequest().body("Invalid date format. Use yyyy-MM-dd format.");
+        }
     }
 
     @GetMapping("/{code}")
@@ -97,9 +138,16 @@ class ReleaseController {
                 @ApiResponse(responseCode = "401", description = "Unauthorized"),
                 @ApiResponse(responseCode = "403", description = "Forbidden"),
             })
+    @PreAuthorize("hasRole('USER')")
     ResponseEntity<Void> createRelease(@RequestBody @Valid CreateReleasePayload payload) {
         var username = SecurityUtils.getCurrentUsername();
-        var cmd = new CreateReleaseCommand(payload.productCode(), payload.code(), payload.description(), username);
+        var cmd = new CreateReleaseCommand(
+                payload.productCode(),
+                payload.code(),
+                payload.description(),
+                payload.plannedReleaseDate(),
+                payload.releaseOwner(),
+                username);
         String code = releaseService.createRelease(cmd);
         log.info("Created release with code {}", code);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
@@ -119,10 +167,16 @@ class ReleaseController {
                 @ApiResponse(responseCode = "401", description = "Unauthorized"),
                 @ApiResponse(responseCode = "403", description = "Forbidden"),
             })
+    @PreAuthorize("hasRole('USER')")
     void updateRelease(@PathVariable String code, @RequestBody UpdateReleasePayload payload) {
         var username = SecurityUtils.getCurrentUsername();
-        var cmd =
-                new UpdateReleaseCommand(code, payload.description(), payload.status(), payload.releasedAt(), username);
+        var cmd = new UpdateReleaseCommand(
+                code,
+                payload.description(),
+                payload.status(),
+                payload.plannedReleaseDate(),
+                payload.releasedAt(),
+                username);
         releaseService.updateRelease(cmd);
     }
 
@@ -136,11 +190,214 @@ class ReleaseController {
                 @ApiResponse(responseCode = "401", description = "Unauthorized"),
                 @ApiResponse(responseCode = "403", description = "Forbidden"),
             })
+    @PreAuthorize("hasRole('ADMIN')")
     ResponseEntity<Void> deleteRelease(@PathVariable String code) {
         if (!releaseService.isReleaseExists(code)) {
             return ResponseEntity.notFound().build();
         }
         releaseService.deleteRelease(code);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/overdue")
+    @Operation(
+            summary = "Find overdue releases",
+            description = "Returns releases past planned release date but not completed",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = ReleaseDto.class))))
+            })
+    Page<ReleaseDto> getOverdueReleases(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "sort", defaultValue = "plannedReleaseDate") String sort,
+            @RequestParam(value = "direction", defaultValue = "ASC") String direction) {
+
+        Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        // Cap page size at 100
+        int cappedSize = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
+
+        return releaseService.findOverdueReleases(pageable);
+    }
+
+    @GetMapping("/at-risk")
+    @Operation(
+            summary = "Find at-risk releases",
+            description = "Returns releases approaching deadline within specified threshold",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = ReleaseDto.class))))
+            })
+    ResponseEntity<?> getAtRiskReleases(
+            @RequestParam(value = "daysThreshold", defaultValue = "7") int daysThreshold,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "sort", defaultValue = "plannedReleaseDate") String sort,
+            @RequestParam(value = "direction", defaultValue = "ASC") String direction) {
+
+        Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        // Cap page size at 100
+        int cappedSize = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
+
+        Page<ReleaseDto> result = releaseService.findAtRiskReleases(daysThreshold, pageable);
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/by-status")
+    @Operation(
+            summary = "Find releases by status",
+            description = "Filter releases by status",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = ReleaseDto.class))))
+            })
+    ResponseEntity<?> getReleasesByStatus(
+            @RequestParam("status") String statusStr,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "sort", defaultValue = "createdAt") String sort,
+            @RequestParam(value = "direction", defaultValue = "DESC") String direction) {
+
+        try {
+            ReleaseStatus status = ReleaseStatus.valueOf(statusStr.toUpperCase());
+
+            Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+            // Cap page size at 100
+            int cappedSize = Math.min(size, 100);
+            Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
+
+            Page<ReleaseDto> result = releaseService.findReleasesByStatus(status, pageable);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body("Invalid status: " + statusStr + ". Valid statuses are: "
+                            + java.util.Arrays.toString(ReleaseStatus.values()));
+        }
+    }
+
+    @GetMapping("/by-owner")
+    @Operation(
+            summary = "Find releases by owner",
+            description = "Filter releases by owner (creator)",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = ReleaseDto.class))))
+            })
+    Page<ReleaseDto> getReleasesByOwner(
+            @RequestParam("owner") String owner,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "sort", defaultValue = "createdAt") String sort,
+            @RequestParam(value = "direction", defaultValue = "DESC") String direction) {
+
+        Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        // Cap page size at 100
+        int cappedSize = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
+
+        return releaseService.findReleasesByOwner(owner, pageable);
+    }
+
+    @GetMapping("/by-date-range")
+    @Operation(
+            summary = "Find releases by date range",
+            description = "Filter releases by planned release date range",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = ReleaseDto.class))))
+            })
+    ResponseEntity<?> getReleasesByDateRange(
+            @RequestParam("startDate") String startDate,
+            @RequestParam("endDate") String endDate,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "sort", defaultValue = "plannedReleaseDate") String sort,
+            @RequestParam(value = "direction", defaultValue = "ASC") String direction) {
+        try {
+            Instant startInstant = parseDate(startDate);
+            Instant endInstant = parseDate(endDate);
+
+            if (startInstant == null || endInstant == null) {
+                return ResponseEntity.badRequest().body("Both startDate and endDate are required");
+            }
+
+            // Validate date range
+            if (startInstant.isAfter(endInstant)) {
+                return ResponseEntity.badRequest().body("Start date must be before end date");
+            }
+
+            Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+            // Cap page size at 100
+            int cappedSize = Math.min(size, 100);
+            Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
+
+            Page<ReleaseDto> releasePage = releaseService.findReleasesByDateRange(startInstant, endInstant, pageable);
+            return ResponseEntity.ok(releasePage);
+        } catch (DateTimeParseException e) {
+            return ResponseEntity.badRequest().body("Invalid date format. Use yyyy-MM-dd format.");
+        }
+    }
+
+    private Instant parseDate(String dateStr) {
+        if (dateStr == null || dateStr.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            // Try to parse as instant first (ISO format with time)
+            return Instant.parse(dateStr.trim());
+        } catch (DateTimeParseException e) {
+            try {
+                // Parse as LocalDate and convert to Instant at start of day UTC
+                LocalDate date = LocalDate.parse(dateStr.trim());
+                return date.atStartOfDay().toInstant(ZoneOffset.UTC);
+            } catch (DateTimeParseException e2) {
+                // Re-throw to be caught by caller
+                throw new DateTimeParseException(
+                        "Invalid date format: " + dateStr + ". Use yyyy-MM-dd or ISO instant format.", dateStr, 0);
+            }
+        }
+    }
+
+    /**
+     * Maps Java field names to database column names for native queries
+     */
+    private String mapSortFieldToDbColumn(String fieldName) {
+        return switch (fieldName) {
+            case "createdAt" -> "created_at";
+            case "updatedAt" -> "updated_at";
+            case "plannedReleaseDate" -> "planned_release_date";
+            case "releasedAt" -> "released_at";
+            case "releaseOwner" -> "release_owner";
+            case "createdBy" -> "created_by";
+            case "updatedBy" -> "updated_by";
+            default -> fieldName; // Keep as-is for fields that don't need mapping
+        };
     }
 }

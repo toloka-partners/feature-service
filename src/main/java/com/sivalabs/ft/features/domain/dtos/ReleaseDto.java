@@ -9,9 +9,11 @@ public record ReleaseDto(
         String code,
         String description,
         ReleaseStatus status,
+        Instant plannedReleaseDate,
         Instant releasedAt,
         String createdBy,
         Instant createdAt,
         String updatedBy,
-        Instant updatedAt)
+        Instant updatedAt,
+        String releaseOwner)
         implements Serializable {}
