@@ -16,7 +16,12 @@ public class Commands {
 
     /* Release Commands */
     public record CreateReleaseCommand(
-            String productCode, String code, String description, Instant plannedReleaseDate, String createdBy) {}
+            String productCode,
+            String code,
+            String description,
+            Instant plannedReleaseDate,
+            String releaseOwner,
+            String createdBy) {}
 
     public record UpdateReleaseCommand(
             String code,

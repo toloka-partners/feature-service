@@ -68,12 +68,22 @@ interface ReleaseRepository extends ListCrudRepository<Release, Long>, PagingAnd
     Page<Release> findByStatus(ReleaseStatus status, Pageable pageable);
 
     /**
-     * Find releases by owner (created by)
+     * Find releases by owner (release owner)
+     */
+    List<Release> findByReleaseOwner(String releaseOwner);
+
+    /**
+     * Find releases by owner with pagination
+     */
+    Page<Release> findByReleaseOwner(String releaseOwner, Pageable pageable);
+
+    /**
+     * Find releases by creator (created by)
      */
     List<Release> findByCreatedBy(String createdBy);
 
     /**
-     * Find releases by owner with pagination
+     * Find releases by creator with pagination
      */
     Page<Release> findByCreatedBy(String createdBy, Pageable pageable);
 
@@ -86,18 +96,4 @@ interface ReleaseRepository extends ListCrudRepository<Release, Long>, PagingAnd
      * Find releases by planned release date range with pagination
      */
     Page<Release> findByPlannedReleaseDateBetween(Instant startDate, Instant endDate, Pageable pageable);
-
-    /**
-     * Find all releases with filtering and pagination
-     */
-    @Query("SELECT r FROM Release r WHERE " + "(:status IS NULL OR r.status = :status) AND "
-            + "(:owner IS NULL OR r.createdBy = :owner) AND "
-            + "(:startDate IS NULL OR r.plannedReleaseDate >= :startDate) AND "
-            + "(:endDate IS NULL OR r.plannedReleaseDate <= :endDate)")
-    Page<Release> findAllWithFilters(
-            @Param("status") ReleaseStatus status,
-            @Param("owner") String owner,
-            @Param("startDate") Instant startDate,
-            @Param("endDate") Instant endDate,
-            Pageable pageable);
 }

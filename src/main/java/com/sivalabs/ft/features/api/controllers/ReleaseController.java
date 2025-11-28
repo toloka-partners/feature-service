@@ -21,7 +21,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -76,22 +75,24 @@ class ReleaseController {
             @RequestParam(value = "sort", required = false, defaultValue = "createdAt") String sort,
             @RequestParam(value = "direction", required = false, defaultValue = "DESC") String direction) {
 
-        // Legacy support for productCode parameter
-        if (productCode != null) {
-            List<ReleaseDto> releases = releaseService.findReleasesByProductCode(productCode);
-            return ResponseEntity.ok(releases);
-        }
-
-        // Enhanced search with pagination and filters
+        // Enhanced search with pagination and filters (including productCode)
         try {
             Instant startInstant = parseDate(startDate);
             Instant endInstant = parseDate(endDate);
 
-            Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
-            Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+            // Validate date range
+            if (startInstant != null && endInstant != null && startInstant.isAfter(endInstant)) {
+                return ResponseEntity.badRequest().body("startDate must be before or equal to endDate");
+            }
 
-            Page<ReleaseDto> releasePage =
-                    releaseService.findReleasesWithFilters(status, owner, startInstant, endInstant, pageable);
+            Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+            // JPQL queries - use Java field names directly
+            // Cap page size at 100
+            int cappedSize = Math.min(size, 100);
+            Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
+
+            Page<ReleaseDto> releasePage = releaseService.findReleasesWithFilters(
+                    productCode, status, owner, startInstant, endInstant, pageable);
 
             return ResponseEntity.ok(releasePage);
         } catch (DateTimeParseException e) {
@@ -141,7 +142,12 @@ class ReleaseController {
     ResponseEntity<Void> createRelease(@RequestBody @Valid CreateReleasePayload payload) {
         var username = SecurityUtils.getCurrentUsername();
         var cmd = new CreateReleaseCommand(
-                payload.productCode(), payload.code(), payload.description(), payload.plannedReleaseDate(), username);
+                payload.productCode(),
+                payload.code(),
+                payload.description(),
+                payload.plannedReleaseDate(),
+                payload.releaseOwner(),
+                username);
         String code = releaseService.createRelease(cmd);
         log.info("Created release with code {}", code);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
@@ -213,7 +219,9 @@ class ReleaseController {
             @RequestParam(value = "direction", defaultValue = "ASC") String direction) {
 
         Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+        // Cap page size at 100
+        int cappedSize = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
 
         return releaseService.findOverdueReleases(pageable);
     }
@@ -231,7 +239,7 @@ class ReleaseController {
                                         mediaType = "application/json",
                                         array = @ArraySchema(schema = @Schema(implementation = ReleaseDto.class))))
             })
-    Page<ReleaseDto> getAtRiskReleases(
+    ResponseEntity<?> getAtRiskReleases(
             @RequestParam(value = "daysThreshold", defaultValue = "7") int daysThreshold,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size,
@@ -239,9 +247,12 @@ class ReleaseController {
             @RequestParam(value = "direction", defaultValue = "ASC") String direction) {
 
         Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+        // Cap page size at 100
+        int cappedSize = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
 
-        return releaseService.findAtRiskReleases(daysThreshold, pageable);
+        Page<ReleaseDto> result = releaseService.findAtRiskReleases(daysThreshold, pageable);
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/by-status")
@@ -257,17 +268,28 @@ class ReleaseController {
                                         mediaType = "application/json",
                                         array = @ArraySchema(schema = @Schema(implementation = ReleaseDto.class))))
             })
-    Page<ReleaseDto> getReleasesByStatus(
-            @RequestParam("status") ReleaseStatus status,
+    ResponseEntity<?> getReleasesByStatus(
+            @RequestParam("status") String statusStr,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size,
             @RequestParam(value = "sort", defaultValue = "createdAt") String sort,
             @RequestParam(value = "direction", defaultValue = "DESC") String direction) {
 
-        Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+        try {
+            ReleaseStatus status = ReleaseStatus.valueOf(statusStr.toUpperCase());
 
-        return releaseService.findReleasesByStatus(status, pageable);
+            Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+            // Cap page size at 100
+            int cappedSize = Math.min(size, 100);
+            Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
+
+            Page<ReleaseDto> result = releaseService.findReleasesByStatus(status, pageable);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body("Invalid status: " + statusStr + ". Valid statuses are: "
+                            + java.util.Arrays.toString(ReleaseStatus.values()));
+        }
     }
 
     @GetMapping("/by-owner")
@@ -291,7 +313,9 @@ class ReleaseController {
             @RequestParam(value = "direction", defaultValue = "DESC") String direction) {
 
         Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+        // Cap page size at 100
+        int cappedSize = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
 
         return releaseService.findReleasesByOwner(owner, pageable);
     }
@@ -324,8 +348,15 @@ class ReleaseController {
                 return ResponseEntity.badRequest().body("Both startDate and endDate are required");
             }
 
+            // Validate date range
+            if (startInstant.isAfter(endInstant)) {
+                return ResponseEntity.badRequest().body("Start date must be before end date");
+            }
+
             Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
-            Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+            // Cap page size at 100
+            int cappedSize = Math.min(size, 100);
+            Pageable pageable = PageRequest.of(page, cappedSize, Sort.by(sortDirection, sort));
 
             Page<ReleaseDto> releasePage = releaseService.findReleasesByDateRange(startInstant, endInstant, pageable);
             return ResponseEntity.ok(releasePage);
@@ -339,12 +370,34 @@ class ReleaseController {
             return null;
         }
         try {
-            // Parse as LocalDate and convert to Instant at start of day UTC
-            LocalDate date = LocalDate.parse(dateStr.trim());
-            return date.atStartOfDay().toInstant(ZoneOffset.UTC);
+            // Try to parse as instant first (ISO format with time)
+            return Instant.parse(dateStr.trim());
         } catch (DateTimeParseException e) {
-            // Re-throw to be caught by caller
-            throw new DateTimeParseException("Invalid date format: " + dateStr, dateStr, 0);
+            try {
+                // Parse as LocalDate and convert to Instant at start of day UTC
+                LocalDate date = LocalDate.parse(dateStr.trim());
+                return date.atStartOfDay().toInstant(ZoneOffset.UTC);
+            } catch (DateTimeParseException e2) {
+                // Re-throw to be caught by caller
+                throw new DateTimeParseException(
+                        "Invalid date format: " + dateStr + ". Use yyyy-MM-dd or ISO instant format.", dateStr, 0);
+            }
         }
+    }
+
+    /**
+     * Maps Java field names to database column names for native queries
+     */
+    private String mapSortFieldToDbColumn(String fieldName) {
+        return switch (fieldName) {
+            case "createdAt" -> "created_at";
+            case "updatedAt" -> "updated_at";
+            case "plannedReleaseDate" -> "planned_release_date";
+            case "releasedAt" -> "released_at";
+            case "releaseOwner" -> "release_owner";
+            case "createdBy" -> "created_by";
+            case "updatedBy" -> "updated_by";
+            default -> fieldName; // Keep as-is for fields that don't need mapping
+        };
     }
 }
