@@ -9,6 +9,7 @@ public record ReleaseDto(
         String code,
         String description,
         ReleaseStatus status,
+        Instant plannedReleaseDate,
         Instant releasedAt,
         String createdBy,
         Instant createdAt,
