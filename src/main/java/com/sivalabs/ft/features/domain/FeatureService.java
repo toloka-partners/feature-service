@@ -12,6 +12,7 @@ import com.sivalabs.ft.features.domain.entities.Feature;
 import com.sivalabs.ft.features.domain.entities.Product;
 import com.sivalabs.ft.features.domain.entities.Release;
 import com.sivalabs.ft.features.domain.events.EventPublisher;
+import com.sivalabs.ft.features.domain.exceptions.BadRequestException;
 import com.sivalabs.ft.features.domain.exceptions.ResourceNotFoundException;
 import com.sivalabs.ft.features.domain.mappers.FeatureMapper;
 import com.sivalabs.ft.features.domain.models.FeaturePlanningStatus;
@@ -159,6 +160,12 @@ public class FeatureService {
                 .findByCode(cmd.releaseCode())
                 .orElseThrow(() -> new ResourceNotFoundException("Release not found: " + cmd.releaseCode()));
 
+        // Check if feature is already assigned to the same release
+        if (feature.getRelease() != null && feature.getRelease().getCode().equals(cmd.releaseCode())) {
+            throw new BadRequestException(
+                    "Feature " + cmd.featureCode() + " is already assigned to release " + cmd.releaseCode());
+        }
+
         feature.setRelease(release);
         feature.setPlanningStatus(FeaturePlanningStatus.NOT_STARTED);
         feature.setPlannedCompletionDate(cmd.plannedCompletionDate());
@@ -182,8 +189,22 @@ public class FeatureService {
                 .orElseThrow(() -> new ResourceNotFoundException("Feature not found: " + cmd.featureCode()));
 
         // Validate status transition if status is being changed
-        if (cmd.planningStatus() != null && feature.getPlanningStatus() != null) {
-            feature.getPlanningStatus().validateTransition(cmd.planningStatus());
+        if (cmd.planningStatus() != null) {
+            FeaturePlanningStatus currentStatus = feature.getPlanningStatus();
+            if (currentStatus != null) {
+                try {
+                    currentStatus.validateTransition(cmd.planningStatus());
+                } catch (IllegalArgumentException e) {
+                    throw new BadRequestException(e.getMessage());
+                }
+            }
+        }
+
+        // Clear blockage reason when moving from BLOCKED status to another status
+        if (cmd.planningStatus() != null
+                && feature.getPlanningStatus() == FeaturePlanningStatus.BLOCKED
+                && cmd.planningStatus() != FeaturePlanningStatus.BLOCKED) {
+            feature.setBlockageReason(null);
         }
 
         if (cmd.plannedCompletionDate() != null) {
@@ -195,11 +216,11 @@ public class FeatureService {
         if (cmd.featureOwner() != null) {
             feature.setFeatureOwner(cmd.featureOwner());
         }
-        if (cmd.blockageReason() != null) {
-            feature.setBlockageReason(cmd.blockageReason());
-        }
         if (cmd.notes() != null) {
             feature.setPlanningNotes(cmd.notes());
+        }
+        if (cmd.blockageReason() != null) {
+            feature.setBlockageReason(cmd.blockageReason());
         }
         feature.setUpdatedBy(cmd.updatedBy());
         feature.setUpdatedAt(Instant.now());

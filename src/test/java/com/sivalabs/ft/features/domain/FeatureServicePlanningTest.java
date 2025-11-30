@@ -1,7 +1,6 @@
 package com.sivalabs.ft.features.domain;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.sivalabs.ft.features.domain.Commands.AssignFeatureCommand;
@@ -11,6 +10,7 @@ import com.sivalabs.ft.features.domain.Commands.UpdateFeaturePlanningCommand;
 import com.sivalabs.ft.features.domain.entities.Feature;
 import com.sivalabs.ft.features.domain.entities.Release;
 import com.sivalabs.ft.features.domain.events.EventPublisher;
+import com.sivalabs.ft.features.domain.exceptions.BadRequestException;
 import com.sivalabs.ft.features.domain.exceptions.ResourceNotFoundException;
 import com.sivalabs.ft.features.domain.mappers.FeatureMapper;
 import com.sivalabs.ft.features.domain.models.FeaturePlanningStatus;
@@ -19,7 +19,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -30,10 +30,10 @@ class FeatureServicePlanningTest {
     private FavoriteFeatureService favoriteFeatureService;
 
     @Mock
-    private ReleaseRepository releaseRepository;
+    private FeatureRepository featureRepository;
 
     @Mock
-    private FeatureRepository featureRepository;
+    private ReleaseRepository releaseRepository;
 
     @Mock
     private ProductRepository productRepository;
@@ -47,180 +47,320 @@ class FeatureServicePlanningTest {
     @Mock
     private FeatureMapper featureMapper;
 
+    @InjectMocks
     private FeatureService featureService;
+
+    private Feature mockFeature;
+    private Release mockRelease;
 
     @BeforeEach
     void setUp() {
-        featureService = new FeatureService(
-                favoriteFeatureService,
-                releaseRepository,
-                featureRepository,
-                productRepository,
-                favoriteFeatureRepository,
-                eventPublisher,
-                featureMapper);
+        mockFeature = new Feature();
+        mockFeature.setCode("FEATURE-1");
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.NOT_STARTED);
+
+        mockRelease = new Release();
+        mockRelease.setCode("REL-1.0");
     }
 
     @Test
-    void shouldAssignFeatureToRelease() {
-        // Given
-        var feature = new Feature();
-        feature.setCode("FEAT-1");
-        var release = new Release();
-        release.setCode("REL-1");
-
+    void shouldAssignFeatureToReleaseSuccessfully() {
         var cmd = new AssignFeatureCommand(
-                "REL-1", "FEAT-1", Instant.now().plusSeconds(86400), "john.doe", "Initial assignment", "admin");
+                "REL-1.0", "FEATURE-1", Instant.now().plusSeconds(30 * 24 * 60 * 60), "owner", "notes", "testuser");
 
-        when(featureRepository.findByCode("FEAT-1")).thenReturn(Optional.of(feature));
-        when(releaseRepository.findByCode("REL-1")).thenReturn(Optional.of(release));
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+        when(releaseRepository.findByCode("REL-1.0")).thenReturn(Optional.of(mockRelease));
 
-        // When
         featureService.assignFeatureToRelease(cmd);
 
-        // Then
-        ArgumentCaptor<Feature> captor = ArgumentCaptor.forClass(Feature.class);
-        verify(featureRepository).save(captor.capture());
-
-        Feature savedFeature = captor.getValue();
-        assertThat(savedFeature.getRelease()).isEqualTo(release);
-        assertThat(savedFeature.getPlanningStatus()).isEqualTo(FeaturePlanningStatus.NOT_STARTED);
-        assertThat(savedFeature.getFeatureOwner()).isEqualTo("john.doe");
-        assertThat(savedFeature.getPlanningNotes()).isEqualTo("Initial assignment");
+        assertEquals(mockRelease, mockFeature.getRelease());
+        assertEquals(FeaturePlanningStatus.NOT_STARTED, mockFeature.getPlanningStatus());
+        assertEquals("owner", mockFeature.getFeatureOwner());
+        assertEquals("notes", mockFeature.getPlanningNotes());
+        verify(featureRepository).save(mockFeature);
     }
 
     @Test
-    void shouldThrowExceptionWhenAssigningNonExistentFeature() {
-        // Given
-        var cmd = new AssignFeatureCommand("REL-1", "FEAT-999", Instant.now(), "owner", "notes", "admin");
-        when(featureRepository.findByCode("FEAT-999")).thenReturn(Optional.empty());
+    void shouldThrowExceptionWhenFeatureAlreadyAssigned() {
+        mockFeature.setRelease(mockRelease); // Feature already assigned to same release
+        var cmd = new AssignFeatureCommand(
+                "REL-1.0", "FEATURE-1", Instant.now().plusSeconds(30 * 24 * 60 * 60), "owner", "notes", "testuser");
 
-        // When/Then
-        assertThatThrownBy(() -> featureService.assignFeatureToRelease(cmd))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Feature not found: FEAT-999");
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+        when(releaseRepository.findByCode("REL-1.0")).thenReturn(Optional.of(mockRelease));
+
+        assertThrows(BadRequestException.class, () -> featureService.assignFeatureToRelease(cmd));
     }
 
     @Test
-    void shouldThrowExceptionWhenAssigningToNonExistentRelease() {
-        // Given
-        var feature = new Feature();
-        var cmd = new AssignFeatureCommand("REL-999", "FEAT-1", Instant.now(), "owner", "notes", "admin");
-        when(featureRepository.findByCode("FEAT-1")).thenReturn(Optional.of(feature));
-        when(releaseRepository.findByCode("REL-999")).thenReturn(Optional.empty());
-
-        // When/Then
-        assertThatThrownBy(() -> featureService.assignFeatureToRelease(cmd))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Release not found: REL-999");
-    }
-
-    @Test
-    void shouldUpdateFeaturePlanning() {
-        // Given
-        var feature = new Feature();
-        feature.setCode("FEAT-1");
-        feature.setPlanningStatus(FeaturePlanningStatus.NOT_STARTED);
-
+    void shouldUpdateFeaturePlanningSuccessfully() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.NOT_STARTED);
         var cmd = new UpdateFeaturePlanningCommand(
-                "FEAT-1",
-                Instant.now().plusSeconds(172800),
+                "FEATURE-1",
+                Instant.now().plusSeconds(30 * 24 * 60 * 60),
                 FeaturePlanningStatus.IN_PROGRESS,
-                "jane.smith",
+                "newowner",
                 null,
-                "Updated planning",
-                "admin");
+                "updated notes",
+                "testuser");
 
-        when(featureRepository.findByCode("FEAT-1")).thenReturn(Optional.of(feature));
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
 
-        // When
         featureService.updateFeaturePlanning(cmd);
 
-        // Then
-        ArgumentCaptor<Feature> captor = ArgumentCaptor.forClass(Feature.class);
-        verify(featureRepository).save(captor.capture());
-
-        Feature savedFeature = captor.getValue();
-        assertThat(savedFeature.getPlanningStatus()).isEqualTo(FeaturePlanningStatus.IN_PROGRESS);
-        assertThat(savedFeature.getFeatureOwner()).isEqualTo("jane.smith");
-        assertThat(savedFeature.getPlanningNotes()).isEqualTo("Updated planning");
+        assertEquals(FeaturePlanningStatus.IN_PROGRESS, mockFeature.getPlanningStatus());
+        assertEquals("newowner", mockFeature.getFeatureOwner());
+        assertEquals("updated notes", mockFeature.getPlanningNotes());
+        verify(featureRepository).save(mockFeature);
     }
 
     @Test
-    void shouldThrowExceptionForInvalidStatusTransition() {
-        // Given
-        var feature = new Feature();
-        feature.setCode("FEAT-1");
-        feature.setPlanningStatus(FeaturePlanningStatus.NOT_STARTED);
-
+    void shouldThrowExceptionWhenFeatureNotFound() {
         var cmd = new UpdateFeaturePlanningCommand(
-                "FEAT-1", null, FeaturePlanningStatus.DONE, null, null, null, "admin");
+                "FEATURE-1",
+                Instant.now().plusSeconds(30 * 24 * 60 * 60),
+                FeaturePlanningStatus.IN_PROGRESS,
+                "owner",
+                "notes",
+                null,
+                "testuser");
 
-        when(featureRepository.findByCode("FEAT-1")).thenReturn(Optional.of(feature));
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.empty());
 
-        // When/Then
-        assertThatThrownBy(() -> featureService.updateFeaturePlanning(cmd))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid planning status transition");
+        assertThrows(ResourceNotFoundException.class, () -> featureService.updateFeaturePlanning(cmd));
+    }
+
+    @Test
+    void shouldValidateStatusTransitionFromNotStartedToInProgress() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.NOT_STARTED);
+        var cmd = new UpdateFeaturePlanningCommand(
+                "FEATURE-1", null, FeaturePlanningStatus.IN_PROGRESS, null, null, null, "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+
+        featureService.updateFeaturePlanning(cmd);
+
+        assertEquals(FeaturePlanningStatus.IN_PROGRESS, mockFeature.getPlanningStatus());
+        verify(featureRepository).save(mockFeature);
+    }
+
+    @Test
+    void shouldRejectInvalidStatusTransitionFromDone() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.DONE);
+        var cmd = new UpdateFeaturePlanningCommand(
+                "FEATURE-1", null, FeaturePlanningStatus.IN_PROGRESS, null, null, null, "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+
+        assertThrows(BadRequestException.class, () -> featureService.updateFeaturePlanning(cmd));
+    }
+
+    @Test
+    void shouldAllowTransitionFromBlockedToInProgress() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.BLOCKED);
+        var cmd = new UpdateFeaturePlanningCommand(
+                "FEATURE-1", null, FeaturePlanningStatus.IN_PROGRESS, null, null, null, "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+
+        featureService.updateFeaturePlanning(cmd);
+
+        assertEquals(FeaturePlanningStatus.IN_PROGRESS, mockFeature.getPlanningStatus());
+        verify(featureRepository).save(mockFeature);
+    }
+
+    @Test
+    void shouldAllowTransitionFromInProgressToDone() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.IN_PROGRESS);
+        var cmd = new UpdateFeaturePlanningCommand(
+                "FEATURE-1", null, FeaturePlanningStatus.DONE, null, null, null, "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+
+        featureService.updateFeaturePlanning(cmd);
+
+        assertEquals(FeaturePlanningStatus.DONE, mockFeature.getPlanningStatus());
+        verify(featureRepository).save(mockFeature);
+    }
+
+    @Test
+    void shouldAllowTransitionFromInProgressToBlocked() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.IN_PROGRESS);
+        var cmd = new UpdateFeaturePlanningCommand(
+                "FEATURE-1", null, FeaturePlanningStatus.BLOCKED, null, "Waiting for dependencies", null, "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+
+        featureService.updateFeaturePlanning(cmd);
+
+        assertEquals(FeaturePlanningStatus.BLOCKED, mockFeature.getPlanningStatus());
+        assertEquals("Waiting for dependencies", mockFeature.getBlockageReason());
+        verify(featureRepository).save(mockFeature);
+    }
+
+    @Test
+    void shouldRejectInvalidStatusTransitionFromNotStartedToDone() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.NOT_STARTED);
+        var cmd = new UpdateFeaturePlanningCommand(
+                "FEATURE-1", null, FeaturePlanningStatus.DONE, null, null, null, "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+
+        assertThrows(BadRequestException.class, () -> featureService.updateFeaturePlanning(cmd));
+    }
+
+    @Test
+    void shouldAllowSameStatusTransition() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.IN_PROGRESS);
+        var cmd = new UpdateFeaturePlanningCommand(
+                "FEATURE-1",
+                Instant.now().plusSeconds(15 * 24 * 60 * 60),
+                FeaturePlanningStatus.IN_PROGRESS, // Same status
+                "owner",
+                null,
+                "updated notes",
+                "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+
+        featureService.updateFeaturePlanning(cmd);
+
+        assertEquals(FeaturePlanningStatus.IN_PROGRESS, mockFeature.getPlanningStatus());
+        assertEquals("updated notes", mockFeature.getPlanningNotes());
+        verify(featureRepository).save(mockFeature);
     }
 
     @Test
     void shouldMoveFeatureBetweenReleases() {
-        // Given
-        var feature = new Feature();
-        feature.setCode("FEAT-1");
-        var oldRelease = new Release();
-        oldRelease.setCode("REL-1");
-        feature.setRelease(oldRelease);
-        feature.setPlanningStatus(FeaturePlanningStatus.IN_PROGRESS);
-
+        mockFeature.setRelease(mockRelease);
         var targetRelease = new Release();
-        targetRelease.setCode("REL-2");
+        targetRelease.setCode("REL-2.0");
+        var cmd = new MoveFeatureCommand("FEATURE-1", "REL-2.0", "Moving to new release", "testuser");
 
-        var cmd = new MoveFeatureCommand("FEAT-1", "REL-2", "Changed priorities", "admin");
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+        when(releaseRepository.findByCode("REL-2.0")).thenReturn(Optional.of(targetRelease));
 
-        when(featureRepository.findByCode("FEAT-1")).thenReturn(Optional.of(feature));
-        when(releaseRepository.findByCode("REL-2")).thenReturn(Optional.of(targetRelease));
-
-        // When
         featureService.moveFeatureBetweenReleases(cmd);
 
-        // Then
-        ArgumentCaptor<Feature> captor = ArgumentCaptor.forClass(Feature.class);
-        verify(featureRepository).save(captor.capture());
-
-        Feature savedFeature = captor.getValue();
-        assertThat(savedFeature.getRelease()).isEqualTo(targetRelease);
-        assertThat(savedFeature.getPlanningStatus()).isEqualTo(FeaturePlanningStatus.NOT_STARTED);
+        assertEquals(targetRelease, mockFeature.getRelease());
+        assertEquals(FeaturePlanningStatus.NOT_STARTED, mockFeature.getPlanningStatus());
+        verify(featureRepository).save(mockFeature);
     }
 
     @Test
     void shouldRemoveFeatureFromRelease() {
-        // Given
-        var feature = new Feature();
-        feature.setCode("FEAT-1");
-        var release = new Release();
-        release.setCode("REL-1");
-        feature.setRelease(release);
-        feature.setPlanningStatus(FeaturePlanningStatus.IN_PROGRESS);
-        feature.setFeatureOwner("john.doe");
-        feature.setPlanningNotes("Some notes");
+        mockFeature.setRelease(mockRelease);
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.IN_PROGRESS);
+        var cmd = new RemoveFeatureCommand("FEATURE-1", "Removing from release", "testuser");
 
-        var cmd = new RemoveFeatureCommand("FEAT-1", "No longer needed in this release", "admin");
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
 
-        when(featureRepository.findByCode("FEAT-1")).thenReturn(Optional.of(feature));
-
-        // When
         featureService.removeFeatureFromRelease(cmd);
 
-        // Then
-        ArgumentCaptor<Feature> captor = ArgumentCaptor.forClass(Feature.class);
-        verify(featureRepository).save(captor.capture());
+        assertNull(mockFeature.getRelease());
+        assertNull(mockFeature.getPlanningStatus());
+        assertNull(mockFeature.getFeatureOwner());
+        assertNull(mockFeature.getPlanningNotes());
+        assertNull(mockFeature.getBlockageReason());
+        verify(featureRepository).save(mockFeature);
+    }
 
-        Feature savedFeature = captor.getValue();
-        assertThat(savedFeature.getRelease()).isNull();
-        assertThat(savedFeature.getPlanningStatus()).isNull();
-        assertThat(savedFeature.getFeatureOwner()).isNull();
-        assertThat(savedFeature.getPlanningNotes()).isNull();
+    @Test
+    void shouldThrowExceptionWhenReleaseNotFoundForAssignment() {
+        var cmd = new AssignFeatureCommand(
+                "REL-1.0", "FEATURE-1", Instant.now().plusSeconds(30 * 24 * 60 * 60), "owner", "notes", "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+        when(releaseRepository.findByCode("REL-1.0")).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> featureService.assignFeatureToRelease(cmd));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenFeatureNotFoundForAssignment() {
+        var cmd = new AssignFeatureCommand(
+                "REL-1.0", "FEATURE-1", Instant.now().plusSeconds(30 * 24 * 60 * 60), "owner", "notes", "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> featureService.assignFeatureToRelease(cmd));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenReleaseNotFoundForMove() {
+        mockFeature.setRelease(mockRelease);
+        var cmd = new MoveFeatureCommand("FEATURE-1", "REL-2.0", "Moving to new release", "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+        when(releaseRepository.findByCode("REL-2.0")).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> featureService.moveFeatureBetweenReleases(cmd));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenFeatureNotFoundForMove() {
+        var cmd = new MoveFeatureCommand("FEATURE-1", "REL-2.0", "Moving to new release", "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> featureService.moveFeatureBetweenReleases(cmd));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenFeatureNotFoundForRemoval() {
+        var cmd = new RemoveFeatureCommand("FEATURE-1", "Removing from release", "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> featureService.removeFeatureFromRelease(cmd));
+    }
+
+    @Test
+    void shouldValidateStatusTransitionFromNotStartedToBlocked() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.NOT_STARTED);
+        var cmd = new UpdateFeaturePlanningCommand(
+                "FEATURE-1", null, FeaturePlanningStatus.BLOCKED, null, "Dependencies not ready", null, "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+
+        featureService.updateFeaturePlanning(cmd);
+
+        assertEquals(FeaturePlanningStatus.BLOCKED, mockFeature.getPlanningStatus());
+        assertEquals("Dependencies not ready", mockFeature.getBlockageReason());
+        verify(featureRepository).save(mockFeature);
+    }
+
+    @Test
+    void shouldClearBlockageReasonWhenMovingFromBlockedToOtherStatus() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.BLOCKED);
+        mockFeature.setBlockageReason("Previous blockage");
+        var cmd = new UpdateFeaturePlanningCommand(
+                "FEATURE-1", null, FeaturePlanningStatus.IN_PROGRESS, null, null, null, "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+
+        featureService.updateFeaturePlanning(cmd);
+
+        assertEquals(FeaturePlanningStatus.IN_PROGRESS, mockFeature.getPlanningStatus());
+        assertNull(mockFeature.getBlockageReason());
+        verify(featureRepository).save(mockFeature);
+    }
+
+    @Test
+    void shouldPreserveExistingValuesWhenPartialUpdate() {
+        mockFeature.setPlanningStatus(FeaturePlanningStatus.IN_PROGRESS);
+        mockFeature.setFeatureOwner("existingowner");
+        mockFeature.setPlanningNotes("existing notes");
+        var cmd = new UpdateFeaturePlanningCommand(
+                "FEATURE-1", null, FeaturePlanningStatus.IN_PROGRESS, null, null, "updated notes only", "testuser");
+
+        when(featureRepository.findByCode("FEATURE-1")).thenReturn(Optional.of(mockFeature));
+
+        featureService.updateFeaturePlanning(cmd);
+
+        assertEquals(FeaturePlanningStatus.IN_PROGRESS, mockFeature.getPlanningStatus());
+        assertEquals("existingowner", mockFeature.getFeatureOwner()); // Should be preserved
+        assertEquals("updated notes only", mockFeature.getPlanningNotes()); // Should be updated
+        verify(featureRepository).save(mockFeature);
     }
 }

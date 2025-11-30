@@ -24,10 +24,10 @@ public enum FeaturePlanningStatus {
         }
 
         return switch (this) {
-            case NOT_STARTED -> targetStatus == IN_PROGRESS;
+            case NOT_STARTED -> targetStatus == IN_PROGRESS || targetStatus == BLOCKED;
             case IN_PROGRESS -> targetStatus == BLOCKED || targetStatus == DONE || targetStatus == NOT_STARTED;
             case BLOCKED -> targetStatus == IN_PROGRESS || targetStatus == NOT_STARTED;
-            case DONE -> targetStatus == IN_PROGRESS; // Allow reopening
+            case DONE -> false; // DONE is final state, no transitions allowed
         };
     }
 
@@ -38,10 +38,10 @@ public enum FeaturePlanningStatus {
      */
     public Set<FeaturePlanningStatus> getValidTransitions() {
         return switch (this) {
-            case NOT_STARTED -> Set.of(NOT_STARTED, IN_PROGRESS);
+            case NOT_STARTED -> Set.of(NOT_STARTED, IN_PROGRESS, BLOCKED);
             case IN_PROGRESS -> Set.of(NOT_STARTED, IN_PROGRESS, BLOCKED, DONE);
             case BLOCKED -> Set.of(NOT_STARTED, IN_PROGRESS, BLOCKED);
-            case DONE -> Set.of(IN_PROGRESS, DONE);
+            case DONE -> Set.of(DONE); // DONE is final state
         };
     }
 
