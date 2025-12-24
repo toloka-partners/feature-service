@@ -1,12 +1,23 @@
 package com.sivalabs.ft.features.api.controllers;
 
+import com.sivalabs.ft.features.api.models.AssignFeatureToReleasePayload;
 import com.sivalabs.ft.features.api.models.CreateReleasePayload;
+import com.sivalabs.ft.features.api.models.MoveFeaturePayload;
+import com.sivalabs.ft.features.api.models.RemoveFeaturePayload;
+import com.sivalabs.ft.features.api.models.UpdateFeaturePlanningPayload;
 import com.sivalabs.ft.features.api.models.UpdateReleasePayload;
 import com.sivalabs.ft.features.api.utils.SecurityUtils;
+import com.sivalabs.ft.features.domain.Commands.AssignFeatureToReleaseCommand;
 import com.sivalabs.ft.features.domain.Commands.CreateReleaseCommand;
+import com.sivalabs.ft.features.domain.Commands.MoveFeatureBetweenReleasesCommand;
+import com.sivalabs.ft.features.domain.Commands.RemoveFeatureFromReleaseCommand;
+import com.sivalabs.ft.features.domain.Commands.UpdateFeaturePlanningCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateReleaseCommand;
+import com.sivalabs.ft.features.domain.FeatureService;
 import com.sivalabs.ft.features.domain.ReleaseService;
+import com.sivalabs.ft.features.domain.dtos.FeatureDto;
 import com.sivalabs.ft.features.domain.dtos.ReleaseDto;
+import com.sivalabs.ft.features.domain.models.FeaturePlanningStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -22,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -37,9 +49,11 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 class ReleaseController {
     private static final Logger log = LoggerFactory.getLogger(ReleaseController.class);
     private final ReleaseService releaseService;
+    private final FeatureService featureService;
 
-    ReleaseController(ReleaseService releaseService) {
+    ReleaseController(ReleaseService releaseService, FeatureService featureService) {
         this.releaseService = releaseService;
+        this.featureService = featureService;
     }
 
     @GetMapping("")
@@ -141,6 +155,132 @@ class ReleaseController {
             return ResponseEntity.notFound().build();
         }
         releaseService.deleteRelease(code);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{releaseCode}/features")
+    @Operation(
+            summary = "Get features assigned to a release",
+            description =
+                    "Get features assigned to a release with optional filtering by planning status, owner, overdue, or blocked",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Successful response",
+                        content =
+                                @Content(
+                                        mediaType = "application/json",
+                                        array = @ArraySchema(schema = @Schema(implementation = FeatureDto.class)))),
+                @ApiResponse(responseCode = "401", description = "Unauthorized"),
+                @ApiResponse(responseCode = "403", description = "Forbidden"),
+            })
+    List<FeatureDto> getReleaseFeatures(
+            @PathVariable String releaseCode,
+            @RequestParam(required = false) FeaturePlanningStatus planningStatus,
+            @RequestParam(required = false) String owner,
+            @RequestParam(required = false) Boolean overdue,
+            @RequestParam(required = false) Boolean blocked) {
+        var username = SecurityUtils.getCurrentUsername();
+        return featureService.findFeaturesByReleaseWithFilters(
+                username, releaseCode, planningStatus, owner, overdue, blocked);
+    }
+
+    @PostMapping("/{releaseCode}/features")
+    @Operation(
+            summary = "Assign feature to release",
+            description = "Assign a feature to a release with planning details",
+            responses = {
+                @ApiResponse(responseCode = "200", description = "Successful response"),
+                @ApiResponse(responseCode = "400", description = "Invalid request"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized"),
+                @ApiResponse(responseCode = "403", description = "Forbidden"),
+                @ApiResponse(responseCode = "404", description = "Feature or release not found"),
+            })
+    ResponseEntity<Void> assignFeatureToRelease(
+            @PathVariable String releaseCode, @RequestBody @Valid AssignFeatureToReleasePayload payload) {
+        var username = SecurityUtils.getCurrentUsername();
+        var cmd = new AssignFeatureToReleaseCommand(
+                releaseCode,
+                payload.featureCode(),
+                payload.plannedCompletionDate(),
+                payload.featureOwner(),
+                payload.notes(),
+                username);
+        featureService.assignFeatureToRelease(cmd);
+        log.info("Feature {} assigned to release {} by {}", payload.featureCode(), releaseCode, username);
+        return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/{releaseCode}/features/{featureCode}/planning")
+    @Operation(
+            summary = "Update feature planning details",
+            description = "Update feature planning details such as dates, planning status, owner, and blockage reason",
+            responses = {
+                @ApiResponse(responseCode = "200", description = "Successful response"),
+                @ApiResponse(responseCode = "400", description = "Invalid request"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized"),
+                @ApiResponse(responseCode = "403", description = "Forbidden"),
+                @ApiResponse(responseCode = "404", description = "Feature or release not found"),
+            })
+    ResponseEntity<Void> updateFeaturePlanning(
+            @PathVariable String releaseCode,
+            @PathVariable String featureCode,
+            @RequestBody UpdateFeaturePlanningPayload payload) {
+        var username = SecurityUtils.getCurrentUsername();
+        var cmd = new UpdateFeaturePlanningCommand(
+                releaseCode,
+                featureCode,
+                payload.plannedCompletionDate(),
+                payload.planningStatus(),
+                payload.featureOwner(),
+                payload.blockageReason(),
+                username);
+        featureService.updateFeaturePlanning(cmd);
+        log.info("Feature {} planning updated in release {} by {}", featureCode, releaseCode, username);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{targetReleaseCode}/features/{featureCode}/move")
+    @Operation(
+            summary = "Move feature between releases",
+            description = "Move a feature from one release to another with a rationale",
+            responses = {
+                @ApiResponse(responseCode = "200", description = "Successful response"),
+                @ApiResponse(responseCode = "400", description = "Invalid request"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized"),
+                @ApiResponse(responseCode = "403", description = "Forbidden"),
+                @ApiResponse(responseCode = "404", description = "Feature or release not found"),
+            })
+    ResponseEntity<Void> moveFeatureBetweenReleases(
+            @PathVariable String targetReleaseCode,
+            @PathVariable String featureCode,
+            @RequestBody @Valid MoveFeaturePayload payload) {
+        var username = SecurityUtils.getCurrentUsername();
+        var cmd = new MoveFeatureBetweenReleasesCommand(featureCode, targetReleaseCode, payload.rationale(), username);
+        featureService.moveFeatureBetweenReleases(cmd);
+        log.info("Feature {} moved to release {} by {}", featureCode, targetReleaseCode, username);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/{releaseCode}/features/{featureCode}")
+    @Operation(
+            summary = "Remove feature from release",
+            description = "Remove a feature from a release with a rationale",
+            responses = {
+                @ApiResponse(responseCode = "200", description = "Successful response"),
+                @ApiResponse(responseCode = "400", description = "Invalid request"),
+                @ApiResponse(responseCode = "401", description = "Unauthorized"),
+                @ApiResponse(responseCode = "403", description = "Forbidden"),
+                @ApiResponse(responseCode = "404", description = "Feature or release not found"),
+            })
+    ResponseEntity<Void> removeFeatureFromRelease(
+            @PathVariable String releaseCode,
+            @PathVariable String featureCode,
+            @RequestBody @Valid RemoveFeaturePayload payload) {
+        var username = SecurityUtils.getCurrentUsername();
+        var cmd = new RemoveFeatureFromReleaseCommand(releaseCode, featureCode, payload.rationale(), username);
+        featureService.removeFeatureFromRelease(cmd);
+        log.info("Feature {} removed from release {} by {}", featureCode, releaseCode, username);
         return ResponseEntity.ok().build();
     }
 }
