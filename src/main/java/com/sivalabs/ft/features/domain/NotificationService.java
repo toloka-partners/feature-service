@@ -23,10 +23,18 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationMapper notificationMapper;
+    private final UserRepository userRepository;
+    private final EmailService emailService;
 
-    public NotificationService(NotificationRepository notificationRepository, NotificationMapper notificationMapper) {
+    public NotificationService(
+            NotificationRepository notificationRepository,
+            NotificationMapper notificationMapper,
+            UserRepository userRepository,
+            EmailService emailService) {
         this.notificationRepository = notificationRepository;
         this.notificationMapper = notificationMapper;
+        this.userRepository = userRepository;
+        this.emailService = emailService;
     }
 
     /**
@@ -36,8 +44,15 @@ public class NotificationService {
     public NotificationDto createNotification(
             String recipientUserId, NotificationEventType eventType, String eventDetails, String link) {
 
+        // Fetch user email from users table
+        String recipientEmail = userRepository
+                .findByUsername(recipientUserId)
+                .map(user -> user.getEmail())
+                .orElse(null);
+
         var notification = new Notification();
         notification.setRecipientUserId(recipientUserId);
+        notification.setRecipientEmail(recipientEmail);
         notification.setEventType(eventType);
         notification.setEventDetails(eventDetails);
         notification.setLink(link);
@@ -49,7 +64,15 @@ public class NotificationService {
 
         log.info("Created notification {} for user {}", notification.getId(), recipientUserId);
 
-        return notificationMapper.toDto(notification);
+        // Send email asynchronously (failure will not prevent notification creation)
+        NotificationDto notificationDto = notificationMapper.toDto(notification);
+        if (recipientEmail != null && !recipientEmail.isEmpty()) {
+            emailService.sendNotificationEmail(notificationDto);
+        } else {
+            log.warn("No email address found for user {}, skipping email notification", recipientUserId);
+        }
+
+        return notificationDto;
     }
 
     /**
@@ -65,8 +88,15 @@ public class NotificationService {
         Instant now = Instant.now();
 
         for (NotificationData data : notificationsData) {
+            // Fetch user email from users table
+            String recipientEmail = userRepository
+                    .findByUsername(data.recipientUserId())
+                    .map(user -> user.getEmail())
+                    .orElse(null);
+
             var notification = new Notification();
             notification.setRecipientUserId(data.recipientUserId());
+            notification.setRecipientEmail(recipientEmail);
             notification.setEventType(data.eventType());
             notification.setEventDetails(data.eventDetails());
             notification.setLink(data.link());
@@ -80,7 +110,17 @@ public class NotificationService {
 
         log.info("Created {} notifications in batch", savedNotifications.size());
 
-        return savedNotifications.stream().map(notificationMapper::toDto).toList();
+        // Send emails asynchronously for all notifications
+        List<NotificationDto> notificationDtos =
+                savedNotifications.stream().map(notificationMapper::toDto).toList();
+
+        notificationDtos.forEach(dto -> {
+            if (dto.recipientEmail() != null && !dto.recipientEmail().isEmpty()) {
+                emailService.sendNotificationEmail(dto);
+            }
+        });
+
+        return notificationDtos;
     }
 
     /**
@@ -142,5 +182,35 @@ public class NotificationService {
         log.info("Marked notification {} as unread for user {}", notificationId, recipientUserId);
 
         return notificationMapper.toDto(notification);
+    }
+
+    /**
+     * Mark notification as read via tracking pixel
+     * This method is called when the email tracking pixel is loaded
+     * It's idempotent - multiple calls won't update the readAt timestamp
+     */
+    @Transactional
+    public void markAsReadViaTrackingPixel(UUID notificationId) {
+        notificationRepository.findById(notificationId).ifPresent(notification -> {
+            if (!notification.getRead()) {
+                notification.setRead(true);
+                notification.setReadAt(Instant.now());
+                notificationRepository.save(notification);
+                log.info(
+                        "Notification {} marked as read via tracking pixel for user {}",
+                        notificationId,
+                        notification.getRecipientUserId());
+            } else {
+                log.debug("Notification {} already marked as read, skipping update", notificationId);
+            }
+        });
+    }
+
+    /**
+     * Check if notification exists by ID
+     */
+    @Transactional(readOnly = true)
+    public boolean notificationExists(UUID notificationId) {
+        return notificationRepository.existsById(notificationId);
     }
 }
