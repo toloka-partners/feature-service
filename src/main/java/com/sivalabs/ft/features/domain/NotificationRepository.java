@@ -1,6 +1,7 @@
 package com.sivalabs.ft.features.domain;
 
 import com.sivalabs.ft.features.domain.entities.Notification;
+import com.sivalabs.ft.features.domain.models.DeliveryStatus;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -32,4 +33,11 @@ public interface NotificationRepository extends ListCrudRepository<Notification,
     @Query(
             "UPDATE Notification n SET n.read = false, n.readAt = null WHERE n.id = :id AND n.recipientUserId = :recipientUserId")
     int markAsUnread(UUID id, String recipientUserId);
+
+    /**
+     * Update delivery status for a notification
+     */
+    @Modifying
+    @Query("UPDATE Notification n SET n.deliveryStatus = :deliveryStatus WHERE n.id = :id")
+    int updateDeliveryStatus(UUID id, DeliveryStatus deliveryStatus);
 }

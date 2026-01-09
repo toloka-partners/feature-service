@@ -189,6 +189,9 @@ public class FeatureService {
         if (feature.getStatus() != null) {
             eventDetails.put("status", feature.getStatus().name());
         }
+        // Add actor information (who triggered the event)
+        eventDetails.put("actor", excludeUser);
+        eventDetails.put("createdBy", feature.getCreatedBy());
 
         try {
             String eventDetailsJson = objectMapper.writeValueAsString(eventDetails);

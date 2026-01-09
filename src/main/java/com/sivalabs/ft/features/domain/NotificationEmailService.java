@@ -2,6 +2,7 @@ package com.sivalabs.ft.features.domain;
 
 import com.sivalabs.ft.features.ApplicationProperties;
 import com.sivalabs.ft.features.domain.entities.Notification;
+import com.sivalabs.ft.features.domain.models.DeliveryStatus;
 import jakarta.mail.internet.MimeMessage;
 import java.time.Instant;
 import org.slf4j.Logger;
@@ -9,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.HtmlUtils;
 
 /**
@@ -22,10 +25,15 @@ public class NotificationEmailService {
 
     private final JavaMailSender mailSender;
     private final ApplicationProperties applicationProperties;
+    private final NotificationRepository notificationRepository;
 
-    public NotificationEmailService(JavaMailSender mailSender, ApplicationProperties applicationProperties) {
+    public NotificationEmailService(
+            JavaMailSender mailSender,
+            ApplicationProperties applicationProperties,
+            NotificationRepository notificationRepository) {
         this.mailSender = mailSender;
         this.applicationProperties = applicationProperties;
+        this.notificationRepository = notificationRepository;
     }
 
     /**
@@ -33,6 +41,7 @@ public class NotificationEmailService {
      * On error: logs recipient, eventType, timestamp, and error details.
      * Does NOT throw exception to avoid affecting notification creation.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendNotificationEmail(Notification notification) {
         if (notification.getRecipientEmail() == null
                 || notification.getRecipientEmail().isBlank()) {
@@ -52,13 +61,29 @@ public class NotificationEmailService {
             helper.setFrom(applicationProperties.mailFrom());
 
             mailSender.send(message);
+
+            // Update delivery status to DELIVERED after successful send
+            // Use @Modifying query because notification is detached (from previous transaction)
+            notificationRepository.updateDeliveryStatus(notification.getId(), DeliveryStatus.DELIVERED);
+
             log.info(
                     "Email sent successfully to {} for notification {}",
                     notification.getRecipientEmail(),
                     notification.getId());
 
         } catch (Exception e) {
+            // Update delivery status to FAILED on error
+            updateDeliveryStatusToFailed(notification);
             logEmailFailure(notification, e);
+        }
+    }
+
+    private void updateDeliveryStatusToFailed(Notification notification) {
+        try {
+            // Use @Modifying query because notification is detached
+            notificationRepository.updateDeliveryStatus(notification.getId(), DeliveryStatus.FAILED);
+        } catch (Exception e) {
+            log.warn("Failed to update delivery status for notification {}", notification.getId(), e);
         }
     }
 

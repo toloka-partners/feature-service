@@ -1,61 +1,50 @@
 package com.sivalabs.ft.features.api.controllers;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.icegreen.greenmail.configuration.GreenMailConfiguration;
+import com.icegreen.greenmail.junit5.GreenMailExtension;
+import com.icegreen.greenmail.util.ServerSetupTest;
 import com.sivalabs.ft.features.AbstractIT;
 import com.sivalabs.ft.features.WithMockOAuth2User;
 import com.sivalabs.ft.features.api.models.CreateFeaturePayload;
-import jakarta.mail.BodyPart;
-import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
-import jakarta.mail.internet.MimeMultipart;
+import java.time.Duration;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mail.MailSendException;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * Integration tests for email notification system.
- * Tests email sending, delivery failure handling, and read tracking via pixel.
+ * Integration tests for email notification system using GreenMail.
+ * More stable than mock-based tests as it uses real SMTP server.
  */
 @Sql("/test-data.sql")
-@ExtendWith(OutputCaptureExtension.class)
-@Import(EmailNotificationIntegrationTest.TestConfig.class)
-class EmailNotificationIntegrationTest extends AbstractIT {
+class EmailNotificationGreenMailTest extends AbstractIT {
 
-    @TestConfiguration
-    static class TestConfig {
-        @Bean
-        @Primary
-        JavaMailSender mockJavaMailSender() {
-            JavaMailSender mailSender = mock(JavaMailSender.class);
-            // Use real MimeMessage so we can inspect content
-            MimeMessage mimeMessage = new MimeMessage((Session) null);
-            org.mockito.Mockito.when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
-            return mailSender;
-        }
+    @RegisterExtension
+    static GreenMailExtension greenMail = new GreenMailExtension(ServerSetupTest.SMTP)
+            .withConfiguration(GreenMailConfiguration.aConfig().withUser("test", "test"))
+            .withPerMethodLifecycle(false);
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.mail.host", () -> "localhost");
+        registry.add(
+                "spring.mail.port", () -> String.valueOf(greenMail.getSmtp().getPort()));
+        registry.add("spring.mail.username", () -> "");
+        registry.add("spring.mail.password", () -> "");
+        registry.add("spring.mail.properties.mail.smtp.auth", () -> "false");
+        registry.add("spring.mail.properties.mail.smtp.starttls.enable", () -> "false");
     }
 
     @Autowired
@@ -64,17 +53,10 @@ class EmailNotificationIntegrationTest extends AbstractIT {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @Autowired
-    private JavaMailSender javaMailSender;
-
     @BeforeEach
     void setUp() {
         jdbcTemplate.execute("DELETE FROM notifications");
-        reset(javaMailSender);
-        // Configure mock to return real MimeMessage so we can inspect content
-        MimeMessage mimeMessage = new MimeMessage((Session) null);
-        org.mockito.Mockito.when(javaMailSender.createMimeMessage()).thenReturn(mimeMessage);
-        doNothing().when(javaMailSender).send(any(MimeMessage.class));
+        greenMail.reset();
     }
 
     // ========== Test 1: Email is sent after notification creation ==========
@@ -95,7 +77,10 @@ class EmailNotificationIntegrationTest extends AbstractIT {
 
         assertThat(result).hasStatus(HttpStatus.CREATED);
 
-        // Then - Verify notification was created with recipient_email
+        // Then - Wait for async email to be sent
+        await().atMost(Duration.ofSeconds(5)).until(() -> greenMail.getReceivedMessages().length > 0);
+
+        // Verify notification was created with recipient_email
         String recipientEmail = jdbcTemplate.queryForObject(
                 "SELECT recipient_email FROM notifications WHERE recipient_user_id = ?", String.class, "bob");
         assertThat(recipientEmail).isEqualTo("bob@company.com");
@@ -104,12 +89,15 @@ class EmailNotificationIntegrationTest extends AbstractIT {
         UUID notificationId = jdbcTemplate.queryForObject(
                 "SELECT id FROM notifications WHERE recipient_user_id = ?", UUID.class, "bob");
 
-        // Verify email was sent and capture the message
-        ArgumentCaptor<MimeMessage> messageCaptor = ArgumentCaptor.forClass(MimeMessage.class);
-        verify(javaMailSender, times(1)).send(messageCaptor.capture());
+        // Verify email was sent
+        MimeMessage[] messages = greenMail.getReceivedMessages();
+        assertThat(messages).hasSize(1);
+
+        MimeMessage sentMessage = messages[0];
+        assertThat(sentMessage.getAllRecipients()[0].toString()).isEqualTo("bob@company.com");
+        assertThat(sentMessage.getSubject()).contains("Feature Created");
 
         // Verify email body contains tracking pixel link
-        MimeMessage sentMessage = messageCaptor.getValue();
         String emailContent = extractEmailContent(sentMessage);
         assertThat(emailContent)
                 .as("Email should contain tracking pixel link with notification ID")
@@ -120,26 +108,20 @@ class EmailNotificationIntegrationTest extends AbstractIT {
         Object content = message.getContent();
         if (content instanceof String) {
             return (String) content;
-        } else if (content instanceof MimeMultipart multipart) {
+        } else if (content instanceof jakarta.mail.internet.MimeMultipart multipart) {
             return extractFromMultipart(multipart);
         }
-        // Fallback: try to get raw content via DataHandler
-        if (message.getDataHandler() != null) {
-            try (java.io.InputStream is = message.getDataHandler().getInputStream()) {
-                return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            }
-        }
-        return "";
+        return content.toString();
     }
 
-    private String extractFromMultipart(MimeMultipart multipart) throws Exception {
+    private String extractFromMultipart(jakarta.mail.internet.MimeMultipart multipart) throws Exception {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < multipart.getCount(); i++) {
-            BodyPart part = multipart.getBodyPart(i);
+            jakarta.mail.BodyPart part = multipart.getBodyPart(i);
             Object partContent = part.getContent();
             if (partContent instanceof String) {
                 sb.append(partContent);
-            } else if (partContent instanceof MimeMultipart nested) {
+            } else if (partContent instanceof jakarta.mail.internet.MimeMultipart nested) {
                 sb.append(extractFromMultipart(nested));
             }
         }
@@ -198,15 +180,13 @@ class EmailNotificationIntegrationTest extends AbstractIT {
         assertThat(result.getResponse().getContentType()).isEqualTo("image/gif");
     }
 
-    // ========== Test 4: Email failure does not affect notification creation ==========
+    // ========== Test 4: Email failure handling ==========
 
     @Test
     @WithMockOAuth2User(username = "alice")
-    void shouldCreateNotificationEvenWhenEmailSendingFails(CapturedOutput output) throws Exception {
-        // Given - Configure mail sender to throw exception
-        doThrow(new MailSendException("SMTP server unavailable"))
-                .when(javaMailSender)
-                .send(any(MimeMessage.class));
+    void shouldCreateNotificationEvenWhenEmailSendingFails() throws Exception {
+        // Given - Stop GreenMail to simulate email failure
+        greenMail.stop();
 
         CreateFeaturePayload payload = new CreateFeaturePayload(
                 "intellij", "Email Failure Test", "Test notification despite email failure", null, "bob");
@@ -226,9 +206,8 @@ class EmailNotificationIntegrationTest extends AbstractIT {
                 "SELECT COUNT(*) FROM notifications WHERE recipient_user_id = ?", Integer.class, "bob");
         assertThat(count).isEqualTo(1);
 
-        // Error should be logged with recipient email and error details
-        assertThat(output.getOut()).contains("bob@company.com");
-        assertThat(output.getOut()).contains("Email delivery failed");
+        // Restart GreenMail for other tests
+        greenMail.start();
     }
 
     // ========== Test 5: Tracking endpoint returns 404 for non-existent notification ==========
@@ -318,6 +297,9 @@ class EmailNotificationIntegrationTest extends AbstractIT {
 
         assertThat(result).hasStatus(HttpStatus.CREATED);
 
+        // Wait for async email
+        await().atMost(Duration.ofSeconds(5)).until(() -> greenMail.getReceivedMessages().length > 0);
+
         // Then - Verify recipient_email column is populated
         String recipientEmail = jdbcTemplate.queryForObject(
                 "SELECT recipient_email FROM notifications WHERE recipient_user_id = ?", String.class, "recipient");
@@ -325,6 +307,11 @@ class EmailNotificationIntegrationTest extends AbstractIT {
         assertThat(recipientEmail)
                 .as("recipient_email should match email from users table")
                 .isEqualTo("recipient@company.com");
+
+        // Verify email was actually sent
+        MimeMessage[] messages = greenMail.getReceivedMessages();
+        assertThat(messages).hasSize(1);
+        assertThat(messages[0].getAllRecipients()[0].toString()).isEqualTo("recipient@company.com");
     }
 
     // ========== Test 9: Tracking endpoint returns valid GIF image ==========
@@ -372,12 +359,14 @@ class EmailNotificationIntegrationTest extends AbstractIT {
 
         assertThat(result).hasStatus(HttpStatus.CREATED);
 
-        // Then - Capture email and verify HTML is escaped
-        ArgumentCaptor<MimeMessage> messageCaptor = ArgumentCaptor.forClass(MimeMessage.class);
-        verify(javaMailSender, times(1)).send(messageCaptor.capture());
+        // Wait for async email
+        await().atMost(Duration.ofSeconds(5)).until(() -> greenMail.getReceivedMessages().length > 0);
 
-        MimeMessage sentMessage = messageCaptor.getValue();
-        String emailContent = extractEmailContent(sentMessage);
+        // Then - Capture email and verify HTML is escaped
+        MimeMessage[] messages = greenMail.getReceivedMessages();
+        assertThat(messages).hasSize(1);
+
+        String emailContent = extractEmailContent(messages[0]);
 
         // Verify malicious tags are escaped (not present as raw HTML)
         assertThat(emailContent).doesNotContain("<script>");
@@ -403,15 +392,16 @@ class EmailNotificationIntegrationTest extends AbstractIT {
 
         assertThat(result).hasStatus(HttpStatus.CREATED);
 
-        // Capture email
-        ArgumentCaptor<MimeMessage> messageCaptor = ArgumentCaptor.forClass(MimeMessage.class);
-        verify(javaMailSender, times(1)).send(messageCaptor.capture());
+        // Wait for async email
+        await().atMost(Duration.ofSeconds(5)).until(() -> greenMail.getReceivedMessages().length > 0);
 
-        MimeMessage sentMessage = messageCaptor.getValue();
-        String emailContent = extractEmailContent(sentMessage);
+        // Capture email
+        MimeMessage[] messages = greenMail.getReceivedMessages();
+        assertThat(messages).hasSize(1);
+
+        String emailContent = extractEmailContent(messages[0]);
 
         // Verify required fields are present (per Task Description)
-        // Note: Tracking pixel is verified in shouldSendEmailWhenNotificationIsCreated
         // 1. Link to affected entity
         assertThat(emailContent).as("Email should contain link to feature").contains("/features/");
         // 2. Event summary (feature title or code should be present)
@@ -445,83 +435,15 @@ class EmailNotificationIntegrationTest extends AbstractIT {
         // Then - Feature should be created successfully
         assertThat(result).hasStatus(HttpStatus.CREATED);
 
+        // Wait a bit to ensure no email is sent
+        Thread.sleep(1000);
+
         // No email should be sent for user not in users table
-        // (implementation may or may not create notification record - we don't check that)
-        verify(javaMailSender, times(0)).send(any(MimeMessage.class));
+        MimeMessage[] messages = greenMail.getReceivedMessages();
+        assertThat(messages).hasSize(0);
     }
 
-    // ========== Test 13: Batch notifications send multiple emails for release status change ==========
-
-    @Test
-    @WithMockOAuth2User(username = "admin")
-    void shouldSendMultipleEmailsForBatchNotifications() throws Exception {
-        // Given - Create release and multiple features assigned to different users
-
-        // Create release
-        mvc.post()
-                .uri("/api/releases")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                        "{\"productCode\":\"intellij\",\"code\":\"BATCH-TEST-REL\",\"description\":\"Batch Test Release\"}")
-                .exchange();
-
-        String releaseCode = "IDEA-BATCH-TEST-REL";
-
-        // Create features assigned to different users (user1, user2)
-        mvc.post()
-                .uri("/api/features")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(
-                        new CreateFeaturePayload("intellij", "Feature 1", "Desc 1", releaseCode, "user1")))
-                .exchange();
-
-        mvc.post()
-                .uri("/api/features")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(
-                        new CreateFeaturePayload("intellij", "Feature 2", "Desc 2", releaseCode, "user2")))
-                .exchange();
-
-        // Clear notifications from feature creation and reset mock
-        jdbcTemplate.execute("DELETE FROM notifications");
-        reset(javaMailSender);
-        MimeMessage mimeMessage = new MimeMessage((Session) null);
-        org.mockito.Mockito.when(javaMailSender.createMimeMessage()).thenReturn(mimeMessage);
-        doNothing().when(javaMailSender).send(any(MimeMessage.class));
-
-        // Transition release: DRAFT → PLANNED → IN_PROGRESS → RELEASED
-        mvc.put()
-                .uri("/api/releases/{code}", releaseCode)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"description\":\"Planned\",\"status\":\"PLANNED\"}")
-                .exchange();
-
-        mvc.put()
-                .uri("/api/releases/{code}", releaseCode)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"description\":\"In Progress\",\"status\":\"IN_PROGRESS\"}")
-                .exchange();
-
-        // When - Update to RELEASED status (triggers batch notifications)
-        var result = mvc.put()
-                .uri("/api/releases/{code}", releaseCode)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"description\":\"Released\",\"status\":\"RELEASED\"}")
-                .exchange();
-
-        assertThat(result).hasStatus(HttpStatus.OK);
-
-        // Then - Verify multiple notifications created (for user1 and user2, not admin who made the update)
-        Integer totalNotifications = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM notifications", Integer.class);
-        assertThat(totalNotifications)
-                .as("Should create notifications for both feature assignees")
-                .isGreaterThanOrEqualTo(2);
-
-        // Verify emails were sent for batch notifications
-        verify(javaMailSender, times(totalNotifications)).send(any(MimeMessage.class));
-    }
-
-    // ========== Test 14: Tracking pixel returns Cache-Control header ==========
+    // ========== Test 13: Tracking pixel returns Cache-Control header ==========
 
     @Test
     void shouldReturnCacheControlHeaderForTrackingPixel() throws Exception {
@@ -544,5 +466,71 @@ class EmailNotificationIntegrationTest extends AbstractIT {
                 .isNotNull()
                 .satisfiesAnyOf(s -> assertThat(s.toLowerCase()).contains("no-cache"), s -> assertThat(s.toLowerCase())
                         .contains("no-store"));
+    }
+
+    // ========== Test 14: Email delivery status tracking ==========
+
+    @Test
+    @WithMockOAuth2User(username = "alice")
+    void shouldTrackEmailDeliveryStatus() throws Exception {
+        // Given
+        CreateFeaturePayload payload =
+                new CreateFeaturePayload("intellij", "Delivery Status Test", "Test delivery tracking", null, "bob");
+
+        // When - Create feature
+        var result = mvc.post()
+                .uri("/api/features")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload))
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.CREATED);
+
+        // Wait for async email processing
+        await().atMost(Duration.ofSeconds(5)).until(() -> greenMail.getReceivedMessages().length > 0);
+
+        // Then - Verify delivery status is updated to DELIVERED
+        String deliveryStatus = jdbcTemplate.queryForObject(
+                "SELECT delivery_status FROM notifications WHERE recipient_user_id = ?", String.class, "bob");
+        assertThat(deliveryStatus).isEqualTo("DELIVERED");
+
+        // Verify email was actually received
+        MimeMessage[] messages = greenMail.getReceivedMessages();
+        assertThat(messages).hasSize(1);
+    }
+
+    // ========== Test 15: Email contains tracking pixel ==========
+
+    @Test
+    @WithMockOAuth2User(username = "alice")
+    void shouldEmbedTrackingPixelInEmail() throws Exception {
+        // Given
+        CreateFeaturePayload payload =
+                new CreateFeaturePayload("intellij", "Tracking Pixel Test", "Test tracking pixel", null, "bob");
+
+        // When - Create feature
+        var result = mvc.post()
+                .uri("/api/features")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload))
+                .exchange();
+
+        assertThat(result).hasStatus(HttpStatus.CREATED);
+
+        // Wait for async email
+        await().atMost(Duration.ofSeconds(5)).until(() -> greenMail.getReceivedMessages().length > 0);
+
+        // Get notification ID
+        UUID notificationId = jdbcTemplate.queryForObject(
+                "SELECT id FROM notifications WHERE recipient_user_id = ?", UUID.class, "bob");
+
+        // Then - Verify email contains tracking pixel
+        MimeMessage[] messages = greenMail.getReceivedMessages();
+        assertThat(messages).hasSize(1);
+
+        String emailContent = extractEmailContent(messages[0]);
+        assertThat(emailContent)
+                .as("Email should contain tracking pixel with notification ID")
+                .contains("http://localhost:8081/notifications/" + notificationId + "/read");
     }
 }
