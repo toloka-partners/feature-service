@@ -241,11 +241,9 @@ public class RoadmapService {
                 .sum();
 
         double overallCompletion = 0.0;
-        if (totalFeatures > 0) {
-            int totalCompleted = roadmapItems.stream()
-                    .mapToInt(item -> item.progressMetrics().completedFeatures())
-                    .sum();
-            overallCompletion = (double) totalCompleted / totalFeatures * 100.0;
+        if (totalReleases > 0) {
+            // Calculate completion percentage based on completed releases, not features
+            overallCompletion = (double) completedReleases / totalReleases * 100.0;
         }
 
         return new RoadmapSummaryDto(
