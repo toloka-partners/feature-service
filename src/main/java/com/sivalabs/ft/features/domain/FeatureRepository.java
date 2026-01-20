@@ -28,4 +28,7 @@ interface FeatureRepository extends ListCrudRepository<Feature, Long> {
 
     @Query(value = "select nextval('feature_code_seq')", nativeQuery = true)
     long getNextFeatureId();
+
+    @Query("select f from Feature f left join fetch f.release where f.assignedTo = :assignee")
+    List<Feature> findByAssignee(String assignee);
 }
