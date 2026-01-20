@@ -4,12 +4,16 @@ import static org.springframework.http.HttpStatus.*;
 
 import com.sivalabs.ft.features.domain.exceptions.BadRequestException;
 import com.sivalabs.ft.features.domain.exceptions.ResourceNotFoundException;
+import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
@@ -39,6 +43,74 @@ class GlobalExceptionHandler {
         log.error("Bad Request", e);
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(BAD_REQUEST, e.getMessage());
         problemDetail.setTitle("Bad Request");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ProblemDetail handle(MethodArgumentTypeMismatchException e) {
+        log.error("Invalid parameter type", e);
+        String message = String.format(
+                "Invalid value '%s' for parameter '%s'. Expected type: %s",
+                e.getValue(),
+                e.getName(),
+                e.getRequiredType() != null ? e.getRequiredType().getSimpleName() : "unknown");
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(BAD_REQUEST, message);
+        problemDetail.setTitle("Invalid Parameter");
+        problemDetail.setProperty("timestamp", Instant.now());
+        problemDetail.setProperty("parameter", e.getName());
+        return problemDetail;
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    ProblemDetail handle(MethodArgumentNotValidException e) {
+        log.error("Validation failed", e);
+        StringBuilder errorMessage = new StringBuilder("Validation failed: ");
+        e.getBindingResult().getFieldErrors().forEach(error -> {
+            errorMessage
+                    .append(error.getField())
+                    .append(" - ")
+                    .append(error.getDefaultMessage())
+                    .append("; ");
+        });
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(BAD_REQUEST, errorMessage.toString());
+        problemDetail.setTitle("Validation Error");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    ProblemDetail handle(ConstraintViolationException e) {
+        log.error("Constraint violation", e);
+        StringBuilder errorMessage = new StringBuilder("Validation failed: ");
+        e.getConstraintViolations().forEach(violation -> {
+            String propertyPath = violation.getPropertyPath().toString();
+            String paramName = propertyPath.substring(propertyPath.lastIndexOf('.') + 1);
+            errorMessage
+                    .append(paramName)
+                    .append(" - ")
+                    .append(violation.getMessage())
+                    .append("; ");
+        });
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(BAD_REQUEST, errorMessage.toString());
+        problemDetail.setTitle("Validation Error");
+        problemDetail.setProperty("timestamp", Instant.now());
+        return problemDetail;
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ProblemDetail handle(HttpMessageNotReadableException e) {
+        log.error("Invalid request body", e);
+        String message = "Invalid request body";
+        if (e.getMessage() != null) {
+            if (e.getMessage().contains("not one of the values accepted for Enum")) {
+                message = "Invalid enum value provided";
+            } else if (e.getMessage().contains("JSON parse error")) {
+                message = "Malformed JSON in request body";
+            }
+        }
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(BAD_REQUEST, message);
+        problemDetail.setTitle("Invalid Request");
         problemDetail.setProperty("timestamp", Instant.now());
         return problemDetail;
     }

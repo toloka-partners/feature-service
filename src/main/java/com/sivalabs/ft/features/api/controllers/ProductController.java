@@ -5,8 +5,10 @@ import com.sivalabs.ft.features.api.models.UpdateProductPayload;
 import com.sivalabs.ft.features.api.utils.SecurityUtils;
 import com.sivalabs.ft.features.domain.Commands.CreateProductCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateProductCommand;
+import com.sivalabs.ft.features.domain.FeatureUsageService;
 import com.sivalabs.ft.features.domain.ProductService;
 import com.sivalabs.ft.features.domain.dtos.ProductDto;
+import com.sivalabs.ft.features.domain.models.ActionType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -35,9 +37,11 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 class ProductController {
     private static final Logger log = LoggerFactory.getLogger(ProductController.class);
     private final ProductService productService;
+    private final FeatureUsageService featureUsageService;
 
-    ProductController(ProductService productService) {
+    ProductController(ProductService productService, FeatureUsageService featureUsageService) {
         this.productService = productService;
+        this.featureUsageService = featureUsageService;
     }
 
     @GetMapping("")
@@ -72,10 +76,17 @@ class ProductController {
                 @ApiResponse(responseCode = "404", description = "Product not found")
             })
     ResponseEntity<ProductDto> getProduct(@PathVariable String code) {
-        return productService
+        var username = SecurityUtils.getCurrentUsername();
+        var result = productService
                 .findProductByCode(code)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+
+        if (username != null && result.getStatusCode().is2xxSuccessful()) {
+            featureUsageService.logUsage(username, null, code, ActionType.PRODUCT_VIEWED);
+        }
+
+        return result;
     }
 
     @PostMapping("")
@@ -101,6 +112,11 @@ class ProductController {
                 payload.code(), payload.prefix(), payload.name(), payload.description(), payload.imageUrl(), username);
         Long id = productService.createProduct(cmd);
         log.info("Created product with id {}", id);
+
+        if (username != null) {
+            featureUsageService.logUsage(username, null, payload.code(), ActionType.PRODUCT_CREATED);
+        }
+
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{code}")
                 .buildAndExpand(payload.code())
@@ -123,5 +139,9 @@ class ProductController {
         var cmd = new UpdateProductCommand(
                 code, payload.prefix(), payload.name(), payload.description(), payload.imageUrl(), username);
         productService.updateProduct(cmd);
+
+        if (username != null) {
+            featureUsageService.logUsage(username, null, code, ActionType.PRODUCT_UPDATED);
+        }
     }
 }
