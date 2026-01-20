@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,10 +45,15 @@ class FeatureController {
     private static final Logger log = LoggerFactory.getLogger(FeatureController.class);
     private final FeatureService featureService;
     private final FavoriteFeatureService favoriteFeatureService;
+    private final IdempotencyService idempotencyService;
 
-    FeatureController(FeatureService featureService, FavoriteFeatureService favoriteFeatureService) {
+    FeatureController(
+            FeatureService featureService,
+            FavoriteFeatureService favoriteFeatureService,
+            IdempotencyService idempotencyService) {
         this.featureService = featureService;
         this.favoriteFeatureService = favoriteFeatureService;
+        this.idempotencyService = idempotencyService;
     }
 
     @GetMapping("")
@@ -137,9 +143,25 @@ class FeatureController {
                 @ApiResponse(responseCode = "401", description = "Unauthorized"),
                 @ApiResponse(responseCode = "403", description = "Forbidden"),
             })
-    ResponseEntity<Void> createFeature(@RequestBody @Valid CreateFeaturePayload payload) {
+    ResponseEntity<Void> createFeature(
+            @RequestBody @Valid CreateFeaturePayload payload,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+
+        // Use eventId from payload as idempotency key
+        String eventId = payload.eventId();
+        var existing = idempotencyService.checkAndStore(eventId, "CREATE_FEATURE", null);
+        if (existing.isPresent()) {
+            String existingCode = existing.get();
+            URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+                    .path("/{code}")
+                    .buildAndExpand(existingCode)
+                    .toUri();
+            return ResponseEntity.created(location).build();
+        }
+
         var username = SecurityUtils.getCurrentUsername();
         var cmd = new CreateFeatureCommand(
+                payload.eventId(),
                 payload.productCode(),
                 payload.releaseCode(),
                 payload.title(),
@@ -148,6 +170,7 @@ class FeatureController {
                 username);
         String code = featureService.createFeature(cmd);
         log.info("Created feature with code {}", code);
+
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{code}")
                 .buildAndExpand(code)
@@ -165,9 +188,21 @@ class FeatureController {
                 @ApiResponse(responseCode = "401", description = "Unauthorized"),
                 @ApiResponse(responseCode = "403", description = "Forbidden"),
             })
-    void updateFeature(@PathVariable String code, @RequestBody UpdateFeaturePayload payload) {
+    void updateFeature(
+            @PathVariable String code,
+            @RequestBody UpdateFeaturePayload payload,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+
+        // Use eventId from payload as idempotency key
+        String eventId = payload.eventId();
+        var existing = idempotencyService.checkAndStore(eventId, "UPDATE_FEATURE", "UPDATED");
+        if (existing.isPresent()) {
+            return;
+        }
+
         var username = SecurityUtils.getCurrentUsername();
         var cmd = new UpdateFeatureCommand(
+                payload.eventId(),
                 code,
                 payload.title(),
                 payload.description(),
@@ -189,12 +224,21 @@ class FeatureController {
                 @ApiResponse(responseCode = "403", description = "Forbidden"),
             })
     ResponseEntity<Void> deleteFeature(@PathVariable String code) {
+
+        // Generate a unique eventId for this delete operation
+        String eventId = "DELETE_" + code + "_" + System.currentTimeMillis();
+        var existing = idempotencyService.checkAndStore(eventId, "DELETE_FEATURE", "DELETED");
+        if (existing.isPresent()) {
+            return ResponseEntity.ok().build();
+        }
+
         var username = SecurityUtils.getCurrentUsername();
         if (!featureService.isFeatureExists(code)) {
             return ResponseEntity.notFound().build();
         }
-        var cmd = new DeleteFeatureCommand(code, username);
+        var cmd = new DeleteFeatureCommand(eventId, code, username);
         featureService.deleteFeature(cmd);
+
         return ResponseEntity.ok().build();
     }
 }
