@@ -8,6 +8,7 @@ import com.sivalabs.ft.features.domain.Commands.CreateFeatureCommand;
 import com.sivalabs.ft.features.domain.Commands.DeleteFeatureCommand;
 import com.sivalabs.ft.features.domain.Commands.UpdateFeatureCommand;
 import com.sivalabs.ft.features.domain.dtos.FeatureDto;
+import com.sivalabs.ft.features.domain.models.ActionType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -44,10 +45,15 @@ class FeatureController {
     private static final Logger log = LoggerFactory.getLogger(FeatureController.class);
     private final FeatureService featureService;
     private final FavoriteFeatureService favoriteFeatureService;
+    private final FeatureUsageService featureUsageService;
 
-    FeatureController(FeatureService featureService, FavoriteFeatureService favoriteFeatureService) {
+    FeatureController(
+            FeatureService featureService,
+            FavoriteFeatureService favoriteFeatureService,
+            FeatureUsageService featureUsageService) {
         this.featureService = featureService;
         this.favoriteFeatureService = favoriteFeatureService;
+        this.featureUsageService = featureUsageService;
     }
 
     @GetMapping("")
@@ -76,8 +82,14 @@ class FeatureController {
         List<FeatureDto> featureDtos;
         if (StringUtils.isNotBlank(productCode)) {
             featureDtos = featureService.findFeaturesByProduct(username, productCode);
+            if (username != null) {
+                featureUsageService.logUsage(username, null, productCode, ActionType.FEATURES_LISTED);
+            }
         } else {
             featureDtos = featureService.findFeaturesByRelease(username, releaseCode);
+            if (username != null) {
+                featureUsageService.logUsage(username, null, null, ActionType.FEATURES_LISTED);
+            }
         }
 
         if (username != null && !featureDtos.isEmpty()) {
@@ -115,6 +127,12 @@ class FeatureController {
             featureDto = featureDto.makeFavorite(favoriteFeatures.get(featureDto.code()));
             featureDtoOptional = Optional.of(featureDto);
         }
+
+        if (username != null && featureDtoOptional.isPresent()) {
+            FeatureDto dto = featureDtoOptional.get();
+            featureUsageService.logUsage(username, dto.code(), null, ActionType.FEATURE_VIEWED);
+        }
+
         return featureDtoOptional
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -148,6 +166,11 @@ class FeatureController {
                 username);
         String code = featureService.createFeature(cmd);
         log.info("Created feature with code {}", code);
+
+        if (username != null) {
+            featureUsageService.logUsage(username, code, payload.productCode(), ActionType.FEATURE_CREATED);
+        }
+
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{code}")
                 .buildAndExpand(code)
@@ -176,6 +199,10 @@ class FeatureController {
                 payload.assignedTo(),
                 username);
         featureService.updateFeature(cmd);
+
+        if (username != null) {
+            featureUsageService.logUsage(username, code, null, ActionType.FEATURE_UPDATED);
+        }
     }
 
     @DeleteMapping("/{code}")
@@ -193,8 +220,14 @@ class FeatureController {
         if (!featureService.isFeatureExists(code)) {
             return ResponseEntity.notFound().build();
         }
+
         var cmd = new DeleteFeatureCommand(code, username);
         featureService.deleteFeature(cmd);
+
+        if (username != null) {
+            featureUsageService.logUsage(username, code, null, ActionType.FEATURE_DELETED);
+        }
+
         return ResponseEntity.ok().build();
     }
 }
