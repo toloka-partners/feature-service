@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import org.hibernate.annotations.ColumnDefault;
 
 @Entity
@@ -52,6 +54,12 @@ public class Feature {
 
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    @OneToMany(mappedBy = "feature", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<FeatureDependency> dependencies = new HashSet<>();
+
+    @OneToMany(mappedBy = "dependsOnFeature", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<FeatureDependency> dependents = new HashSet<>();
 
     public Long getId() {
         return id;
@@ -147,5 +155,21 @@ public class Feature {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Set<FeatureDependency> getDependencies() {
+        return dependencies;
+    }
+
+    public void setDependencies(Set<FeatureDependency> dependencies) {
+        this.dependencies = dependencies;
+    }
+
+    public Set<FeatureDependency> getDependents() {
+        return dependents;
+    }
+
+    public void setDependents(Set<FeatureDependency> dependents) {
+        this.dependents = dependents;
     }
 }
